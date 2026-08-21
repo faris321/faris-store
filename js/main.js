@@ -740,19 +740,18 @@ function openAccount() {
       
       if (roleEl) {
         if (isAdmin) {
-          // الأدمن — لا نعرض أي مؤشر ظاهر، فقط نوجهه للوحة التحكم مباشرة
-          roleEl.hidden = true;
-          closeAccount();
-          window.location.href = "admin.html";
-          return;
+          // الأدمن — نعرض معلوماته مع شارة خاصة
+          roleEl.hidden = false;
+          roleEl.textContent = "🛡️ أدمن";
+          roleEl.style.color = "#fbbf24";
+          roleEl.style.background = "rgba(251,191,36,.15)";
+          roleEl.style.border = "1px solid rgba(251,191,36,.3)";
         } else {
           roleEl.hidden = false;
           roleEl.textContent = "👤 زبون";
           roleEl.style.color = "#9d9bc0";
           roleEl.style.background = "rgba(255,255,255,.06)";
           roleEl.style.border = "1px solid rgba(255,255,255,.12)";
-          const btn = document.getElementById("profileAdminBtn");
-          if (btn) btn.hidden = true;
         }
       }
     }
