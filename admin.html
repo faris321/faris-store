@@ -276,14 +276,13 @@ var PAGE_TITLES={overview:"نظرة عامة",orders:"الطلبات",chats:"ا�
 var activeConvId=null,pollTimer=null,toastTimer=null;
 function hashStr(s){var h=0;for(var i=0;i<s.length;i++)h=Math.imul(31,h)+s.charCodeAt(i)|0;return h.toString(36);}
 var PW_HASH=hashStr("otaibi511@");
-var PW_HASH2=hashStr("admin@1");
 function load(key,def){try{var v=JSON.parse(localStorage.getItem(key));return v!==null&&v!==undefined?v:def;}catch(e){return def;}}
 function save(key,val){localStorage.setItem(key,JSON.stringify(val));}
 function showToast(msg,type){var t=document.getElementById("toast");t.textContent=msg;t.className="show"+(type==="error"?" error":type==="warn"?" warn":"");clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.className="";},3500);}
 function togglePw(){var i=document.getElementById("pwInput"),e=document.getElementById("pwEye");if(i.type==="password"){i.type="text";e.className="fas fa-eye-slash";}else{i.type="password";e.className="fas fa-eye";}}
 function tryLogin(){
   var val=document.getElementById("pwInput").value;
-  if(hashStr(val)===PW_HASH||hashStr(val)===PW_HASH2){
+  if(hashStr(val)===PW_HASH){
     save(KEYS.auth,{at:Date.now()});
     document.getElementById("loginScreen").style.display="none";
     initDashboard();
@@ -417,6 +416,14 @@ function renderOrdersTable(orders){
   }).join("");
 }
 function setOrderStatus(orderNumber,status){
+  var token=localStorage.getItem("fs-token");
+  // أرسل للسيرفر أولاً
+  fetch("/api/orders/status",{
+    method:"POST",
+    headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},
+    body:JSON.stringify({orderNumber:orderNumber,status:status})
+  }).catch(function(){});
+  // حدّث محلياً أيضاً
   var orders=JSON.parse(localStorage.getItem("fs-admin-orders")||"[]");
   orders=orders.map(function(o){if(o.orderNumber===orderNumber)o.status=status;return o;});
   localStorage.setItem("fs-admin-orders",JSON.stringify(orders));

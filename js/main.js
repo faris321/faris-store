@@ -418,9 +418,9 @@ function openOrder(productName, priceUSD, priceSAR) {
   if (form)    { form.hidden = false;    form.style.display    = "flex"; }
   if (confirm) { confirm.hidden = true;  confirm.style.display = "none"; }
 
-  modal.classList.add("active");
+  if (modal) modal.classList.add("active");
   document.body.style.overflow = "hidden";
-  document.getElementById("orderForm").reset();
+  document.getElementById("orderForm")?.reset();
 
   // اعرض السعر بعد الـ reset عشان الكمية ترجع 1
   const qtyInp = document.getElementById("orderQty");
@@ -435,9 +435,11 @@ function closeOrder() {
   document.body.style.overflow = "";
 }
 
-modal.addEventListener("click", e => { if (e.target === modal) closeOrder(); });
+if (modal) {
+  modal.addEventListener("click", e => { if (e.target === modal) closeOrder(); });
+}
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape" && modal.classList.contains("active")) closeOrder();
+  if (modal && e.key === "Escape" && modal.classList.contains("active")) closeOrder();
 });
 
 /* ==========================
@@ -447,7 +449,7 @@ async function submitOrder(e) {
   e.preventDefault();
 
   const user    = loadStore(KEYS.user, null);
-  const contact = document.getElementById("buyerContact").value.trim();
+  const contact = document.getElementById("buyerContact")?.value.trim() ?? "";
   const sel     = document.querySelector('input[name="payment"]:checked');
   const payment = sel ? sel.value : "";
   const notes   = document.getElementById("orderNotes").value.trim();

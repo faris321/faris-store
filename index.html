@@ -64,6 +64,13 @@
           display:flex;align-items:center;gap:6px;transition:.25s ease;flex-shrink:0;
         " id="cartBtn">
           <i class="fas fa-shopping-cart"></i>
+          <span id="cartBadge" hidden style="
+            position:absolute;top:-6px;left:-6px;
+            background:var(--danger);color:#fff;
+            font-size:.65rem;font-weight:900;
+            width:18px;height:18px;border-radius:50%;
+            display:flex;align-items:center;justify-content:center;
+          ">0</span>
         </button>
       </div>
 
@@ -1054,7 +1061,7 @@
       <form class="order-form" id="orderForm" onsubmit="submitOrder(event)">
         <div class="form-group">
           <label for="buyerContact">معرّف التواصل</label>
-          <input type="text" id="buyerContact" placeholder="مثال: اسم المستخدم أو وسيلة التواصل" required />
+          <input type="text" id="buyerContact" placeholder="رقم الجوال أو الإيميل للتواصل معك" required />
         </div>
         <div class="form-group">
           <label>الكمية</label>
@@ -1244,9 +1251,9 @@
       <div class="footer-links">
         <a href="#bloxaccounts">🍓 حسابات بلوكس فروت</a>
         <a href="#bloxrace">🔱 ريس V4</a>
-        <a href="blox-fruits.html">🍓 بلوكس فروت</a>
-        <a href="mm2.html">🔪 MM2</a>
-        <a href="gpo.html">👁️ GPO</a>
+        <a href="#bloxitems">🍓 بلوكس فروت</a>
+        <a href="#mm2">🔪 MM2</a>
+        <a href="#gpo">👁️ GPO</a>
       </div>
       <div class="footer-socials">
         <a href="https://wa.me/966546252805" target="_blank" aria-label="واتساب" class="social-btn">
