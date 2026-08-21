@@ -843,42 +843,10 @@ function adminLogin(e) {
 }
 
 // تحديد نوع الفورم (زبون أو أدمن) بناءً على الاختيار
-let _isAdminMode = false;
-
-function toggleAccountMode() {
-  _isAdminMode = !_isAdminMode;
-  const nameLabel  = document.querySelector('label[for="accountName"]');
-  const phoneLabel = document.querySelector('label[for="accountPhone"]');
-  const nameInput  = document.getElementById("accountName");
-  const phoneInput = document.getElementById("accountPhone");
-  const btn        = document.querySelector("#accountForm button[type=submit]");
-  const toggle     = document.getElementById("accountModeToggle");
-  const statusEl   = document.getElementById("accountStatus");
-
-  if (_isAdminMode) {
-    if (nameLabel)  nameLabel.textContent  = "إيميل الأدمن";
-    if (phoneLabel) phoneLabel.textContent = "كلمة المرور";
-    if (nameInput)  nameInput.placeholder  = "الإيميل";
-    if (phoneInput) { phoneInput.placeholder = "كلمة المرور"; phoneInput.type = "password"; }
-    if (btn)        btn.innerHTML = '<i class="fas fa-shield-alt"></i> دخول الأدمن';
-    if (toggle)     toggle.textContent = "← دخول كزبون";
-    if (statusEl)   statusEl.textContent = "دخول لوحة التحكم";
-  } else {
-    if (nameLabel)  nameLabel.textContent  = "الاسم";
-    if (phoneLabel) phoneLabel.textContent = "الإيميل";
-    if (nameInput)  nameInput.placeholder  = "اكتب اسمك";
-    if (phoneInput) { phoneInput.placeholder = "example@gmail.com"; phoneInput.type = "email"; }
-    if (btn)        btn.innerHTML = '<i class="fas fa-user-check"></i> تسجيل';
-    if (toggle)     toggle.textContent = "← دخول كأدمن";
-    if (statusEl)   statusEl.textContent = "أدخل اسمك وإيميلك للتسجيل";
-  }
-}
-
-// إرسال الفورم حسب النوع
+// إرسال فورم حساب الزبون فقط
 function submitAccountForm(e) {
   e && e.preventDefault();
-  if (_isAdminMode) adminLogin(e);
-  else registerUser(e);
+  registerUser(e);
 }
 /* ==========================
    CHAT — يُخزن في localStorage
@@ -1313,17 +1281,13 @@ document.addEventListener("DOMContentLoaded", () => {
     ?.addEventListener("click", closeAccount);
   document.getElementById("accountOverlay")
     ?.addEventListener("click", e => { if (e.target.id === "accountOverlay") closeAccount(); });
-  // فورم موحّد (زبون أو أدمن)
+  // فورم تسجيل الزبون
   document.getElementById("accountForm")
     ?.addEventListener("submit", submitAccountForm);
-  // زر تبديل الوضع
-  const modeToggle = document.getElementById("accountModeToggle");
-  if (modeToggle) modeToggle.addEventListener("click", toggleAccountMode);
   // تسجيل الخروج
   document.getElementById("accountLogout")
     ?.addEventListener("click", () => {
       clearAuth();
-      _isAdminMode = false;
       updateAccountButton();
       closeAccount();
       showToast("✅ تم تسجيل الخروج");
