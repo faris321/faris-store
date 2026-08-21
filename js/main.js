@@ -786,66 +786,61 @@ function closeAccount() {
 }
 
 // ── تسجيل الزبون (اسم + إيميل) ──────────────────────
-function registerUser(e) {
+// ── فورم موحّد — يتعرف تلقائياً على الأدمن ─────────────
+// الزبون: اسم + إيميل عادي → تسجيل مباشر
+// الأدمن: يكتب إيميله في "الاسم" وكلمة المرور في "الإيميل" → يُحوَّل للوحة التحكم
+function submitAccountForm(e) {
   e && e.preventDefault();
-  const name  = (document.getElementById("accountName")?.value  || "").trim();
-  const email = (document.getElementById("accountPhone")?.value || "").trim(); // حقل الإيميل
-  if (!name)  { showToast("⚠️ أدخل اسمك", "error"); return; }
-  if (!email) { showToast("⚠️ أدخل إيميلك", "error"); return; }
+  const field1 = (document.getElementById("accountName")?.value  || "").trim();
+  const field2 = (document.getElementById("accountPhone")?.value || "").trim();
+
+  if (!field1 || !field2) { showToast("⚠️ يرجى ملء جميع الحقول", "error"); return; }
+
+  // ── فحص صامت: هل هذا الأدمن؟ ──
+  function _h(s){let h=0;for(let i=0;i<s.length;i++)h=Math.imul(31,h)+s.charCodeAt(i)|0;return h.toString(36);}
+  const ADMIN_EMAIL = "otaibi511@";
+  const ADMIN_HASH  = _h("otaibi511@");
+
+  if (field1 === ADMIN_EMAIL && _h(field2) === ADMIN_HASH) {
+    // دخول أدمن — جرّب السيرفر أولاً
+    apiCall("POST", "/api/admin/login", { email: field1, password: field2 })
+      .then(data => {
+        if (data.token) setAuthToken(data.token);
+        const user = data.user || { name: "فارس", email: ADMIN_EMAIL, role: "admin" };
+        saveStore("fs-user", user);
+        closeAccount();
+        window.location.href = "admin.html";
+      })
+      .catch(() => {
+        // fallback محلي
+        saveStore("fs-user", { name: "فارس", email: ADMIN_EMAIL, role: "admin" });
+        closeAccount();
+        window.location.href = "admin.html";
+      });
+    return;
+  }
+
+  // ── تسجيل زبون عادي ──
+  const name  = field1;
+  const email = field2;
 
   apiCall("POST", "/api/register", { name, email })
     .then(data => {
-      if (!data.ok) { showToast("⚠️ " + data.error, "error"); return; }
-      setAuthToken(data.token);
-      saveStore("fs-user", data.user);
+      if (data.token) setAuthToken(data.token);
+      const user = data.user || { name, email, role: "customer" };
+      saveStore("fs-user", user);
       updateAccountButton();
       closeAccount();
       showToast(`✅ أهلاً ${name}!`, "success");
     })
-    .catch(() => showToast("⚠️ فشل الاتصال", "error"));
-}
-
-// ── دخول الأدمن (إيميل + كلمة مرور) ─────────────────
-function adminLogin(e) {
-  e && e.preventDefault();
-  const email = (document.getElementById("accountName")?.value  || "").trim();
-  const pass  = (document.getElementById("accountPhone")?.value || "").trim();
-  if (!email || !pass) { showToast("⚠️ أدخل الإيميل وكلمة المرور", "error"); return; }
-
-  // دالة hash بسيطة للتحقق المحلي
-  function _h(s){let h=0;for(let i=0;i<s.length;i++)h=Math.imul(31,h)+s.charCodeAt(i)|0;return h.toString(36);}
-  const ADMIN_HASH = _h("otaibi511@");
-  const ADMIN_EMAIL_KEY = "otaibi511@";
-
-  apiCall("POST", "/api/admin/login", { email, password: pass })
-    .then(data => {
-      if (!data.ok) { showToast("⚠️ " + data.error, "error"); return; }
-      setAuthToken(data.token);
-      saveStore("fs-user", data.user);
+    .catch(() => {
+      // fallback محلي
+      saveStore("fs-user", { name, email, role: "customer" });
       updateAccountButton();
       closeAccount();
-      showToast("✅ مرحباً بك يا أدمن 🛡️", "success");
-      setTimeout(() => { window.location.href = "admin.html"; }, 1000);
-    })
-    .catch(() => {
-      // fallback محلي — لو السيرفر مش شغال
-      if (email === ADMIN_EMAIL_KEY && _h(pass) === ADMIN_HASH) {
-        const user = { name: "فارس", email, role: "admin" };
-        saveStore("fs-user", user);
-        updateAccountButton();
-        closeAccount();
-        showToast("✅ مرحباً بك يا أدمن 🛡️", "success");
-        setTimeout(() => { window.location.href = "admin.html"; }, 1000);
-      } else {
-        showToast("⚠️ إيميل أو كلمة المرور غير صحيحة", "error");
-      }
+      showToast(`✅ أهلاً ${name}!`, "success");
     });
 }
-
-// تحديد نوع الفورم (زبون أو أدمن) بناءً على الاختيار
-// إرسال فورم حساب الزبون فقط
-function submitAccountForm(e) {
-  e && e.preventDefault();
   registerUser(e);
 }
 /* ==========================
