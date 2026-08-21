@@ -1,4 +1,4 @@
-/* ===========================
+﻿/* ===========================
    FARIS STORE — main.js  (نسخة بدون سيرفر)
    =========================== */
 
@@ -865,44 +865,18 @@ function initChat() {
   const messages = document.getElementById("chatMessages");
   if (!launcher || !panel || !form || !messages) return;
 
-  const convId = getOrCreateConvId();
+  const convId   = getOrCreateConvId();
+  const userName = () => loadStore(KEYS.user, null)?.name || "زائر";
 
-  function getConv() {
-    const convs = loadStore(KEYS.convs, {});
-    const existing = convs[convId];
-    if (existing) {
-      // تأكد دائماً إن الـ id موجود
-      if (!existing.id) existing.id = convId;
-      return existing;
-    }
-    return { id: convId, name: loadStore(KEYS.user, null)?.name || "زائر", messages: [], unread: 0, at: Date.now() };
-  }
-
-  function saveConv(conv) {
-    const convs = loadStore(KEYS.convs, {});
-    // تأكد دائماً إن الـ id محفوظ داخل الـ object
-    conv.id = convId;
-    convs[convId] = conv;
-    saveStore(KEYS.convs, convs);
-  }
-
-  function renderMsgs() {
-    const conv = getConv();
-
-    // إذا كانت المحادثة مخفية من الأدمن → أظهر رسالة للزبون
-    if (conv.hiddenFromBuyer) {
-      messages.innerHTML = '<p class="chat-empty">المحادثة غير متاحة حالياً، تواصل معنا عبر واتساب.</p>';
-      return;
-    }
-
-    const msgs = (conv.messages || []).filter(m => m.text !== "__linked__");
-    if (!msgs.length) {
+  // ── رسم الرسائل من مصفوفة ─────────────────────────
+  function renderMsgs(msgList) {
+    if (!msgList || !msgList.length) {
       messages.innerHTML = '<p class="chat-empty">ابدأ رسالتك للدعم، وسيظهر الرد هنا.</p>';
       return;
     }
     const atBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 60;
     messages.innerHTML = "";
-    msgs.forEach(m => {
+    msgList.forEach(m => {
       const el = document.createElement("p");
       el.className = `chat-message ${m.from}`;
       el.textContent = m.text;
@@ -917,11 +891,27 @@ function initChat() {
     if (atBottom) messages.scrollTop = messages.scrollHeight;
   }
 
+  // ── جلب الرسائل من السيرفر ────────────────────────
+  function fetchMsgs() {
+    fetch(`/api/chat/messages?convId=${encodeURIComponent(convId)}`)
+      .then(r => r.json())
+      .then(data => {
+        const msgs = (data.messages || []).filter(m => m.text !== "__linked__");
+        renderMsgs(msgs);
+      })
+      .catch(() => {
+        // fallback: اقرأ من localStorage
+        const conv = loadStore(KEYS.convs, {})[convId];
+        const msgs = ((conv?.messages) || []).filter(m => m.text !== "__linked__");
+        renderMsgs(msgs);
+      });
+  }
+
   launcher.addEventListener("click", () => {
     panel.hidden = false;
-    renderMsgs();
+    fetchMsgs();
     clearInterval(chatPollTimer);
-    chatPollTimer = setInterval(renderMsgs, 3000);
+    chatPollTimer = setInterval(fetchMsgs, 3000);
   });
 
   closeBtn.addEventListener("click", () => {
@@ -934,41 +924,43 @@ function initChat() {
     const input = document.getElementById("chatInput");
     const text  = input.value.trim();
     if (!text) return;
-
-    // لا تسمح بالإرسال إذا كانت المحادثة مخفية أو ممنوع
-    const conv = getConv();
-    if (conv.hiddenFromBuyer) {
-      input.value = "";
-      messages.innerHTML = '<p class="chat-empty">المحادثة غير متاحة حالياً، تواصل معنا عبر واتساب.</p>';
-      return;
-    }
-    if (conv.mutedBuyer) {
-      input.value = "";
-      messages.innerHTML = '<p class="chat-empty">تم إيقاف إرسال الرسائل مؤقتاً، تواصل معنا عبر واتساب.</p>';
-      return;
-    }
-
     input.value = "";
-    conv.messages = conv.messages || [];
-    conv.messages.push({ id: Date.now().toString(36), from: "buyer", text, at: new Date().toISOString() });
-    conv.messages = conv.messages.slice(-200);
-    conv.unread = (conv.unread || 0) + 1;
-    conv.at     = Date.now();
-    conv.name   = loadStore(KEYS.user, null)?.name || conv.name || "زائر";
-    saveConv(conv);
-    renderMsgs();
 
-    // ── إشعار تيليجرام برسالة الدعم ──────────────────
-    const userName = conv.name || "زائر";
+    const name = userName();
+
+    // أرسل للسيرفر
+    fetch("/api/chat/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ convId, text, name, email: loadStore(KEYS.user, null)?.email || "" }),
+    })
+    .then(() => fetchMsgs())
+    .catch(() => {
+      // fallback localStorage
+      const convs = loadStore(KEYS.convs, {});
+      const conv  = convs[convId] || { id: convId, name, messages: [], unread: 0, at: Date.now() };
+      conv.id = convId;
+      conv.messages = conv.messages || [];
+      conv.messages.push({ id: Date.now().toString(36), from: "buyer", text, at: new Date().toISOString() });
+      conv.messages = conv.messages.slice(-200);
+      conv.unread = (conv.unread || 0) + 1;
+      conv.at = Date.now();
+      conv.name = name;
+      convs[convId] = conv;
+      saveStore(KEYS.convs, convs);
+      fetchMsgs();
+    });
+
+    // إشعار تيليجرام
     sendTelegramNotification(
       `💬 *رسالة دعم جديدة — فارس ستور*\n\n` +
-      `👤 *المرسل:* ${userName}\n` +
+      `👤 *المرسل:* ${name}\n` +
       `📝 *الرسالة:* ${text}\n\n` +
       `⏰ ${new Date().toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}`
     );
   });
 
-  renderMsgs();
+  fetchMsgs();
 }
 
 /* ==========================

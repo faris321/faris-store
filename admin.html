@@ -236,8 +236,8 @@
   <div class="page" id="page-orders">
     <div class="panel">
       <div class="ph"><h3>📦 الطلبات</h3><button class="refresh-btn" onclick="loadOrders()"><i class="fas fa-sync-alt"></i></button></div>
-      <table><thead><tr><th>رقم الطلب</th><th>المنتج</th><th>الزبون</th><th>الدفع</th><th>السعر</th><th>الحالة</th><th>التاريخ</th></tr></thead>
-      <tbody id="ordersTable"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">لا توجد طلبات</td></tr></tbody></table>
+      <table><thead><tr><th>رقم الطلب</th><th>المنتج</th><th>الزبون</th><th>التواصل</th><th>الدفع</th><th>السعر</th><th>الحالة</th><th>التاريخ</th></tr></thead>
+      <tbody id="ordersTable"><tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">لا توجد طلبات</td></tr></tbody></table>
     </div>
   </div>
 
@@ -298,14 +298,46 @@ function initDashboard(){loadOverview();startPolling();}
 function switchPage(id){document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");});document.querySelectorAll(".nav-item").forEach(function(n){n.classList.remove("active");});var pg=document.getElementById("page-"+id),nv=document.getElementById("nav-"+id);if(pg)pg.classList.add("active");if(nv)nv.classList.add("active");document.getElementById("topbarTitle").textContent=PAGE_TITLES[id]||id;if(id==="chats")renderConvList();if(id==="users")renderUsers();if(id==="overview")loadOverview();if(id==="orders")loadOrders();}
 function refreshCurrent(){var a=document.querySelector(".page.active");if(a)switchPage(a.id.replace("page-",""));}
 function loadOverview(){
-  var convs=load(KEYS.convs,{}),users=load(KEYS.users,{}),list=Object.values(convs),unread=list.reduce(function(s,c){return s+(c.unread||0);},0);
-  document.getElementById("stConvs").textContent=list.length;
-  document.getElementById("stUnread").textContent=unread;
-  document.getElementById("stUsers").textContent=Object.keys(users).length;
-  updateUnreadBadge(unread);
-
-  // جلب الطلبات من السيرفر
   var token=localStorage.getItem("fs-token");
+
+  // جلب المحادثات من السيرفر
+  fetch("/api/chat/list",{headers:token?{Authorization:"Bearer "+token}:{}})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var list=data.conversations||[];
+      var unread=list.reduce(function(s,c){return s+(c.unread||0);},0);
+      document.getElementById("stConvs").textContent=list.length;
+      document.getElementById("stUnread").textContent=unread;
+      updateUnreadBadge(unread);
+      var tbody=document.getElementById("ovTable");
+      if(!list.length){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">لا توجد محادثات</td></tr>';return;}
+      tbody.innerHTML=list.slice(0,8).map(function(c){
+        var last=c.lastMsg;
+        return'<tr>'
+          +'<td><strong>'+esc(c.name||"زائر")+'</strong>'+(c.unread?'<span class="nbadge" style="display:inline-flex">'+c.unread+'</span>':'')+'</td>'
+          +'<td style="color:var(--muted);font-size:.82rem">'+(last?esc(last.text.slice(0,50)):"—")+'</td>'
+          +'<td style="color:var(--muted);font-size:.76rem">'+(last?fmtTime(last.at):"—")+'</td>'
+          +'<td><button class="btn btn-primary btn-sm" onclick="goToConv(\''+esc(c.convId)+'\')"><i class="fas fa-reply"></i> فتح</button></td>'
+        +'</tr>';
+      }).join("");
+    })
+    .catch(function(){
+      // fallback localStorage
+      var convs=load(KEYS.convs,{}),users=load(KEYS.users,{});
+      var list=Object.values(convs),unread=list.reduce(function(s,c){return s+(c.unread||0);},0);
+      document.getElementById("stConvs").textContent=list.length;
+      document.getElementById("stUnread").textContent=unread;
+      document.getElementById("stUsers").textContent=Object.keys(users).length;
+      updateUnreadBadge(unread);
+    });
+
+  // جلب المستخدمين
+  fetch("/api/users/list")
+    .then(function(r){return r.json();})
+    .then(function(data){document.getElementById("stUsers").textContent=(data.users||[]).length;})
+    .catch(function(){document.getElementById("stUsers").textContent=Object.keys(load(KEYS.users,{})).length;});
+
+  // جلب الطلبات
   fetch("/api/orders",{headers:token?{Authorization:"Bearer "+token}:{}})
     .then(function(r){return r.json();})
     .then(function(data){
@@ -315,11 +347,6 @@ function loadOverview(){
       var badge=document.getElementById("ordersBadge");
       if(badge){badge.textContent=pending;badge.hidden=pending===0;}
     }).catch(function(){});
-
-  var real=list.filter(function(c){return(c.messages||[]).length>0;}).sort(function(a,b){return(b.at||0)-(a.at||0);});
-  var tbody=document.getElementById("ovTable");
-  if(!real.length){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">لا توجد محادثات</td></tr>';return;}
-  tbody.innerHTML=real.slice(0,8).map(function(c){var msgs=(c.messages||[]).filter(function(m){return m.text!=="__linked__";});var last=msgs[msgs.length-1];return'<tr><td><strong>'+esc(c.name||"زائر")+'</strong>'+(c.orderRef?'<span style="margin-right:6px;font-size:.72rem;color:var(--accent);font-weight:800">#'+esc(c.orderRef)+'</span>':'')+(c.unread?'<span class="nbadge" style="display:inline-flex">'+c.unread+'</span>':'')+'</td><td style="color:var(--muted);font-size:.82rem">'+(last?esc(last.text.slice(0,50)):'—')+'</td><td style="color:var(--muted);font-size:.76rem">'+(last?fmtTime(last.at):'—')+'</td><td><button class="btn btn-primary btn-sm" onclick="goToConv(\''+esc(c.id)+'\')"><i class="fas fa-reply"></i> فتح</button></td></tr>';}).join("");
 }
 function goToConv(convId){switchPage("chats");setTimeout(function(){openConv(convId);},80);}
 
@@ -327,7 +354,7 @@ function goToConv(convId){switchPage("chats");setTimeout(function(){openConv(con
 function loadOrders(){
   var tbody=document.getElementById("ordersTable");
   if(!tbody)return;
-  tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px"><span style="color:var(--muted)">جاري التحميل...</span></td></tr>';
+  tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px"><span style="color:var(--muted)">جاري التحميل...</span></td></tr>';
 
   var token=localStorage.getItem("fs-token");
   fetch("/api/orders",{headers:token?{Authorization:"Bearer "+token}:{}})
@@ -387,16 +414,153 @@ function setOrderStatus(orderNumber,status){
   showToast(status==="done"?"✅ تم تحديد الطلب كمكتمل":"❌ تم إلغاء الطلب");
   loadOrders();
 }
-function renderConvList(){var convs=load(KEYS.convs,{}),changed=false;Object.keys(convs).forEach(function(k){if(!convs[k].id){convs[k].id=k;changed=true;}if(!convs[k].messages){convs[k].messages=[];changed=true;}});if(changed)save(KEYS.convs,convs);var list=Object.values(convs).sort(function(a,b){return(b.at||0)-(a.at||0);});var el=document.getElementById("convList");if(!el)return;if(!list.length){el.innerHTML='<div class="conv-empty">لا توجد محادثات بعد 💬</div>';return;}el.innerHTML=list.map(function(c){var msgs=(c.messages||[]).filter(function(m){return m.text!=="__linked__";});var last=msgs[msgs.length-1],cid=c.id;return'<div class="conv-item '+(cid===activeConvId?"active":"")+'" onclick="openConv(\''+esc(cid)+'\')">'+'<div class="conv-av" style="'+(c.mutedBuyer?"opacity:.4":"")+'">'+(c.name||"ز").charAt(0)+'</div>'+'<div class="conv-meta"><div class="conv-name">'+(c.hiddenFromBuyer?'<i class="fas fa-eye-slash" style="font-size:.7rem;color:var(--pl);margin-left:4px"></i>':'')+(c.mutedBuyer?'<i class="fas fa-volume-mute" style="font-size:.7rem;color:var(--danger);margin-left:4px"></i>':'')+esc(c.name||"زائر")+(c.orderRef?'<span style="margin-right:5px;font-size:.7rem;color:var(--accent);font-weight:800">#'+esc(c.orderRef)+'</span>':'')+'</div><div class="conv-prev">'+(last?esc(last.text):"لا توجد رسائل")+'</div></div>'+'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px"><span class="conv-time">'+(last?fmtTime(last.at):"")+'</span>'+((c.unread||0)>0?'<span class="conv-unread">'+c.unread+'</span>':'')+'</div></div>';}).join("");}
-function openConv(convId){activeConvId=convId;renderConvList();var convs=load(KEYS.convs,{}),conv=convs[convId];if(!conv)return;conv.unread=0;save(KEYS.convs,convs);updateUnreadBadge(Object.values(convs).reduce(function(s,c){return s+(c.unread||0);},0));loadOverview();renderChatWindow(conv);}
-function renderChatWindow(conv){var win=document.getElementById("chatWin");if(!win)return;var isHidden=conv.hiddenFromBuyer||false,isMuted=conv.mutedBuyer||false;var header='<div class="cw-header"><div class="conv-av">'+(conv.name||"ز").charAt(0)+'</div><div style="flex:1"><div class="cw-name">'+esc(conv.name||"زائر")+(conv.orderRef?'<span style="margin-right:8px;font-size:.75rem;color:var(--accent);font-weight:700">#'+esc(conv.orderRef)+'</span>':'')+'</div><div class="cw-sub">محادثة دعم</div></div><div class="cw-actions"><button class="btn btn-sm '+(isHidden?"btn-success":"btn-ghost")+'" onclick="toggleHide(\''+esc(conv.id)+'\')">'+'<i class="fas fa-'+(isHidden?"eye":"eye-slash")+'"></i>'+(isHidden?"إظهار":"إخفاء")+'</button><button class="btn btn-sm '+(isMuted?"btn-success":"btn-danger")+'" onclick="toggleMute(\''+esc(conv.id)+'\')">'+'<i class="fas fa-'+(isMuted?"volume-up":"volume-mute")+'"></i>'+(isMuted?"رفع المنع":"منع")+'</button><button class="btn btn-warn btn-sm" onclick="setOrderRef(\''+esc(conv.id)+'\')"><i class="fas fa-hashtag"></i></button><button class="btn btn-danger btn-sm" onclick="deleteConv(\''+esc(conv.id)+'\')"><i class="fas fa-trash"></i></button></div></div>';var banners="";if(isHidden)banners+='<div class="hidden-banner"><i class="fas fa-eye-slash"></i> مخفية عن الزبون</div>';if(isMuted)banners+='<div class="muted-banner"><i class="fas fa-volume-mute"></i> الزبون ممنوع من الإرسال</div>';var msgs=(conv.messages||[]).filter(function(m){return m.text!=="__linked__";});var msgsHtml=msgs.length===0?'<div class="cw-empty"><i class="fas fa-comment-slash"></i><span>لا توجد رسائل</span></div>':msgs.map(function(m){var imp=m.important||false;return'<div class="msg '+m.from+(imp?" important":"")+'">'+'<button class="msg-del" onclick="deleteMsg(\''+esc(conv.id)+'\',\''+esc(m.id)+'\')" title="حذف"><i class="fas fa-times"></i></button>'+'<button class="msg-del" style="left:20px" onclick="toggleImportant(\''+esc(conv.id)+'\',\''+esc(m.id)+'\')" title="تمييز"><i class="fas fa-star" style="color:'+(imp?"var(--accent)":"var(--muted)")+'"></i></button>'+'<span class="msg-from">'+(m.from==="buyer"?"🧑 "+esc(conv.name||"زائر"):"🛡️ الدعم")+'</span>'+esc(m.text)+'<span class="msg-time">'+fmtTime(m.at)+'</span></div>';}).join("");var replyForm='<form class="cw-reply" onsubmit="sendReply(event,\''+esc(conv.id)+'\')">'+'<input id="replyInp" placeholder="اكتب ردك..." maxlength="500" required autocomplete="off" />'+'<button class="send-btn" type="submit"><i class="fas fa-paper-plane"></i></button></form>';win.innerHTML=header+banners+'<div class="cw-msgs" id="cwMsgs">'+msgsHtml+'</div>'+replyForm;var m=document.getElementById("cwMsgs");if(m)m.scrollTop=m.scrollHeight;}
-function sendReply(e,convId){e.preventDefault();var inp=document.getElementById("replyInp"),text=inp.value.trim();if(!text)return;inp.value="";var convs=load(KEYS.convs,{}),conv=convs[convId];if(!conv)return;conv.messages=conv.messages||[];conv.messages.push({id:uid(),from:"support",text:text,at:new Date().toISOString()});conv.messages=conv.messages.slice(-200);conv.at=Date.now();save(KEYS.convs,convs);renderChatWindow(conv);renderConvList();loadOverview();showToast("✅ تم إرسال الرد");}
-function deleteMsg(convId,msgId){var convs=load(KEYS.convs,{}),conv=convs[convId];if(!conv)return;conv.messages=(conv.messages||[]).filter(function(m){return m.id!==msgId;});save(KEYS.convs,convs);renderChatWindow(conv);showToast("🗑️ تم حذف الرسالة");}
-function toggleImportant(convId,msgId){var convs=load(KEYS.convs,{}),conv=convs[convId];if(!conv)return;conv.messages=(conv.messages||[]).map(function(m){if(m.id===msgId)m.important=!m.important;return m;});save(KEYS.convs,convs);renderChatWindow(conv);}
-function toggleHide(convId){var convs=load(KEYS.convs,{}),conv=convs[convId];if(!conv)return;conv.hiddenFromBuyer=!conv.hiddenFromBuyer;save(KEYS.convs,convs);showToast(conv.hiddenFromBuyer?"🚫 مخفية عن الزبون":"👁️ ظاهرة للزبون");renderChatWindow(conv);renderConvList();}
-function toggleMute(convId){var convs=load(KEYS.convs,{}),conv=convs[convId];if(!conv)return;conv.mutedBuyer=!conv.mutedBuyer;save(KEYS.convs,convs);showToast(conv.mutedBuyer?"🔇 تم منع الزبون":"🔊 تم رفع المنع",conv.mutedBuyer?"warn":"success");renderChatWindow(conv);renderConvList();}
-function deleteConv(convId){if(!confirm("هل تريد حذف هذه المحادثة نهائياً؟"))return;var convs=load(KEYS.convs,{});delete convs[convId];save(KEYS.convs,convs);activeConvId=null;document.getElementById("chatWin").innerHTML='<div class="no-select"><i class="fas fa-comments"></i><span>اختر محادثة</span></div>';renderConvList();loadOverview();showToast("🗑️ تم حذف المحادثة");}
-function setOrderRef(convId){var convs=load(KEYS.convs,{}),conv=convs[convId];if(!conv)return;var input=window.prompt("أدخل رقم الطلب:",conv.orderRef||"");if(input===null)return;conv.orderRef=input.trim();save(KEYS.convs,convs);showToast(conv.orderRef?"✅ #"+conv.orderRef:"✅ تم الحذف");renderChatWindow(conv);renderConvList();}
+function renderConvList(){
+  var token=localStorage.getItem("fs-token");
+  fetch("/api/chat/list",{headers:token?{Authorization:"Bearer "+token}:{}})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var list=data.conversations||[];
+      var el=document.getElementById("convList");
+      if(!el)return;
+      // حدّث الإحصاء
+      var totalUnread=list.reduce(function(s,c){return s+(c.unread||0);},0);
+      updateUnreadBadge(totalUnread);
+      document.getElementById("stUnread").textContent=totalUnread;
+      document.getElementById("stConvs").textContent=list.length;
+      if(!list.length){el.innerHTML='<div class="conv-empty">لا توجد محادثات بعد 💬</div>';return;}
+      el.innerHTML=list.map(function(c){
+        var last=c.lastMsg,cid=c.convId;
+        return'<div class="conv-item '+(cid===activeConvId?"active":"")+'" onclick="openConv(\''+esc(cid)+'\')">'
+          +'<div class="conv-av">'+(c.name||"ز").charAt(0)+'</div>'
+          +'<div class="conv-meta">'
+            +'<div class="conv-name">'+esc(c.name||"زائر")+'</div>'
+            +'<div class="conv-prev">'+(last?esc(last.text.slice(0,40)):"لا توجد رسائل")+'</div>'
+          +'</div>'
+          +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">'
+            +'<span class="conv-time">'+(last?fmtTime(last.at):"")+'</span>'
+            +((c.unread||0)>0?'<span class="conv-unread">'+c.unread+'</span>':'')
+          +'</div>'
+        +'</div>';
+      }).join("");
+    })
+    .catch(function(){
+      // fallback localStorage
+      var convs=load(KEYS.convs,{});
+      var list=Object.values(convs).sort(function(a,b){return(b.at||0)-(a.at||0);});
+      var el=document.getElementById("convList");
+      if(!el)return;
+      if(!list.length){el.innerHTML='<div class="conv-empty">لا توجد محادثات بعد 💬</div>';return;}
+      el.innerHTML=list.map(function(c){
+        var msgs=(c.messages||[]).filter(function(m){return m.text!=="__linked__";});
+        var last=msgs[msgs.length-1],cid=c.id||c.convId;
+        return'<div class="conv-item '+(cid===activeConvId?"active":"")+'" onclick="openConv(\''+esc(cid)+'\')">'
+          +'<div class="conv-av">'+(c.name||"ز").charAt(0)+'</div>'
+          +'<div class="conv-meta"><div class="conv-name">'+esc(c.name||"زائر")+'</div>'
+          +'<div class="conv-prev">'+(last?esc(last.text):"لا توجد رسائل")+'</div></div>'
+          +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">'
+          +'<span class="conv-time">'+(last?fmtTime(last.at):"")+'</span>'
+          +((c.unread||0)>0?'<span class="conv-unread">'+c.unread+'</span>':'')+'</div></div>';
+      }).join("");
+    });
+}
+
+function openConv(convId){
+  activeConvId=convId;
+  var token=localStorage.getItem("fs-token");
+  fetch("/api/chat/messages?convId="+encodeURIComponent(convId),{headers:token?{Authorization:"Bearer "+token}:{}})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      renderChatWindow({id:convId,convId:convId,name:data.name||"زائر",messages:data.messages||[]});
+      renderConvList();
+      loadOverview();
+    })
+    .catch(function(){
+      // fallback localStorage
+      var conv=load(KEYS.convs,{})[convId];
+      if(conv){conv.unread=0;var convs=load(KEYS.convs,{});convs[convId]=conv;save(KEYS.convs,convs);}
+      if(conv)renderChatWindow(conv);
+      renderConvList();
+    });
+}
+
+function renderChatWindow(conv){
+  var win=document.getElementById("chatWin");
+  if(!win)return;
+  var cid=conv.id||conv.convId||activeConvId;
+  var header='<div class="cw-header">'
+    +'<div class="conv-av">'+(conv.name||"ز").charAt(0)+'</div>'
+    +'<div style="flex:1"><div class="cw-name">'+esc(conv.name||"زائر")+'</div>'
+    +'<div class="cw-sub">محادثة دعم</div></div>'
+    +'<div class="cw-actions">'
+    +'<button class="btn btn-danger btn-sm" onclick="deleteConv(\''+esc(cid)+'\')"><i class="fas fa-trash"></i></button>'
+    +'</div></div>';
+  var msgs=(conv.messages||[]).filter(function(m){return m.text!=="__linked__";});
+  var msgsHtml=msgs.length===0
+    ?'<div class="cw-empty"><i class="fas fa-comment-slash"></i><span>لا توجد رسائل</span></div>'
+    :msgs.map(function(m){
+      return'<div class="msg '+m.from+'">'
+        +'<span class="msg-from">'+(m.from==="buyer"?"🧑 "+esc(conv.name||"زائر"):"🛡️ الدعم")+'</span>'
+        +esc(m.text)
+        +'<span class="msg-time">'+fmtTime(m.at)+'</span>'
+      +'</div>';
+    }).join("");
+  var replyForm='<form class="cw-reply" onsubmit="sendReply(event,\''+esc(cid)+'\')">'
+    +'<input id="replyInp" placeholder="اكتب ردك..." maxlength="500" required autocomplete="off" />'
+    +'<button class="send-btn" type="submit"><i class="fas fa-paper-plane"></i></button>'
+    +'</form>';
+  win.innerHTML=header+'<div class="cw-msgs" id="cwMsgs">'+msgsHtml+'</div>'+replyForm;
+  var m=document.getElementById("cwMsgs");
+  if(m)m.scrollTop=m.scrollHeight;
+}
+
+function sendReply(e,convId){
+  e.preventDefault();
+  var inp=document.getElementById("replyInp"),text=inp.value.trim();
+  if(!text)return;
+  inp.value="";
+  var token=localStorage.getItem("fs-token");
+  fetch("/api/chat/reply",{
+    method:"POST",
+    headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},
+    body:JSON.stringify({convId:convId,text:text})
+  })
+  .then(function(){
+    // اقرأ الرسائل المحدّثة
+    return fetch("/api/chat/messages?convId="+encodeURIComponent(convId),{headers:token?{Authorization:"Bearer "+token}:{}});
+  })
+  .then(function(r){return r.json();})
+  .then(function(data){
+    renderChatWindow({id:convId,convId:convId,name:data.name||"زائر",messages:data.messages||[]});
+    renderConvList();
+    showToast("✅ تم إرسال الرد");
+  })
+  .catch(function(){
+    // fallback localStorage
+    var convs=load(KEYS.convs,{}),conv=convs[convId];
+    if(!conv)return;
+    conv.messages=conv.messages||[];
+    conv.messages.push({id:uid(),from:"support",text:text,at:new Date().toISOString()});
+    conv.messages=conv.messages.slice(-200);
+    conv.at=Date.now();
+    save(KEYS.convs,convs);
+    renderChatWindow(conv);
+    renderConvList();
+    showToast("✅ تم إرسال الرد");
+  });
+}
+
+function deleteConv(convId){
+  if(!confirm("هل تريد حذف هذه المحادثة نهائياً؟"))return;
+  // حذف من localStorage كـ fallback
+  var convs=load(KEYS.convs,{});
+  delete convs[convId];
+  save(KEYS.convs,convs);
+  activeConvId=null;
+  document.getElementById("chatWin").innerHTML='<div class="no-select"><i class="fas fa-comments"></i><span>اختر محادثة</span></div>';
+  renderConvList();
+  loadOverview();
+  showToast("🗑️ تم حذف المحادثة");
+}
 function renderUsers(){
   var tbody=document.getElementById("usersTable");
   document.getElementById("stUsers").textContent="...";
@@ -439,7 +603,45 @@ function openAddUser(){document.getElementById("addUserModal").classList.add("op
 function closeModal(id){document.getElementById(id).classList.remove("open");}
 document.getElementById("addUserModal").addEventListener("click",function(e){if(e.target===this)closeModal("addUserModal");});
 function saveManualUser(){var name=document.getElementById("addName").value.trim(),phone=document.getElementById("addPhone").value.trim(),role=document.getElementById("addRole").value;if(!name){showToast("⚠️ أدخل الاسم","error");return;}var users=load(KEYS.users,{}),key=phone||name;users[key]={name:name,phone:phone||"",role:role,lastSeen:new Date().toISOString(),addedByAdmin:true};save(KEYS.users,users);closeModal("addUserModal");document.getElementById("addName").value="";document.getElementById("addPhone").value="";document.getElementById("addRole").value="customer";showToast("✅ تم إضافة "+name);renderUsers();loadOverview();}
-function startPolling(){clearInterval(pollTimer);pollTimer=setInterval(function(){var convs=load(KEYS.convs,{}),unread=Object.values(convs).reduce(function(s,c){return s+(c.unread||0);},0);updateUnreadBadge(unread);document.getElementById("stUnread").textContent=unread;document.getElementById("stConvs").textContent=Object.keys(convs).length;if(document.getElementById("page-chats").classList.contains("active"))renderConvList();if(document.getElementById("page-orders")&&document.getElementById("page-orders").classList.contains("active"))loadOrders();if(activeConvId&&document.getElementById("page-chats").classList.contains("active")){var conv=convs[activeConvId];if(conv){var msgs=document.getElementById("cwMsgs");if(msgs){var atBottom=msgs.scrollHeight-msgs.scrollTop-msgs.clientHeight<60,visible=(conv.messages||[]).filter(function(m){return m.text!=="__linked__";});msgs.innerHTML=visible.length===0?'<div class="cw-empty"><i class="fas fa-comment-slash"></i><span>لا توجد رسائل</span></div>':visible.map(function(m){var imp=m.important||false;return'<div class="msg '+m.from+(imp?" important":"")+'">'+'<button class="msg-del" onclick="deleteMsg(\''+esc(conv.id)+'\',\''+esc(m.id)+'\')" title="حذف"><i class="fas fa-times"></i></button>'+'<button class="msg-del" style="left:20px" onclick="toggleImportant(\''+esc(conv.id)+'\',\''+esc(m.id)+'\')" title="تمييز"><i class="fas fa-star" style="color:'+(imp?"var(--accent)":"var(--muted)")+'"></i></button>'+'<span class="msg-from">'+(m.from==="buyer"?"🧑 "+esc(conv.name||"زائر"):"🛡️ الدعم")+'</span>'+esc(m.text)+'<span class="msg-time">'+fmtTime(m.at)+'</span></div>';}).join("");if(atBottom)msgs.scrollTop=msgs.scrollHeight;}}}},4000);}
+function startPolling(){
+  clearInterval(pollTimer);
+  pollTimer=setInterval(function(){
+    var token=localStorage.getItem("fs-token");
+    // تحديث المحادثات والإشعارات
+    fetch("/api/chat/list",{headers:token?{Authorization:"Bearer "+token}:{}})
+      .then(function(r){return r.json();})
+      .then(function(data){
+        var list=data.conversations||[];
+        var unread=list.reduce(function(s,c){return s+(c.unread||0);},0);
+        updateUnreadBadge(unread);
+        document.getElementById("stUnread").textContent=unread;
+        document.getElementById("stConvs").textContent=list.length;
+        if(document.getElementById("page-chats").classList.contains("active"))renderConvList();
+      }).catch(function(){});
+    // تحديث الرسائل المفتوحة
+    if(activeConvId&&document.getElementById("page-chats").classList.contains("active")){
+      fetch("/api/chat/messages?convId="+encodeURIComponent(activeConvId),{headers:token?{Authorization:"Bearer "+token}:{}})
+        .then(function(r){return r.json();})
+        .then(function(data){
+          var cwMsgs=document.getElementById("cwMsgs");
+          if(!cwMsgs)return;
+          var atBottom=cwMsgs.scrollHeight-cwMsgs.scrollTop-cwMsgs.clientHeight<60;
+          var msgs=(data.messages||[]).filter(function(m){return m.text!=="__linked__";});
+          cwMsgs.innerHTML=msgs.length===0
+            ?'<div class="cw-empty"><i class="fas fa-comment-slash"></i><span>لا توجد رسائل</span></div>'
+            :msgs.map(function(m){
+              return'<div class="msg '+m.from+'">'
+                +'<span class="msg-from">'+(m.from==="buyer"?"🧑 "+esc(data.name||"زائر"):"🛡️ الدعم")+'</span>'
+                +esc(m.text)
+                +'<span class="msg-time">'+fmtTime(m.at)+'</span>'
+              +'</div>';
+            }).join("");
+          if(atBottom)cwMsgs.scrollTop=cwMsgs.scrollHeight;
+        }).catch(function(){});
+    }
+    if(document.getElementById("page-orders")&&document.getElementById("page-orders").classList.contains("active"))loadOrders();
+  },4000);
+}
 function updateUnreadBadge(n){var b=document.getElementById("unreadBadge");b.textContent=n;b.hidden=n===0;}
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
 function fmtTime(iso){if(!iso)return"";try{return new Date(iso).toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"});}catch(e){return"";}}
