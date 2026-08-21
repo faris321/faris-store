@@ -766,9 +766,11 @@ function openAccount() {
     }
     if (logoutEl) logoutEl.hidden = false;
   } else {
+    // ما في مستخدم — خلّي كل شيء على وضع التسجيل
     if (iconEl) iconEl.textContent = "👤";
     if (statusEl) statusEl.textContent = "أدخل اسمك وإيميلك للتسجيل";
     if (formEl) { formEl.hidden = false; formEl.style.display = "flex"; }
+    if (logoutEl) logoutEl.hidden = true;  // إخفاء زر تسجيل الخروج
   }
 }
 
