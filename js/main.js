@@ -748,21 +748,13 @@ function openAccount() {
       if (nameEl) nameEl.textContent = user.name;
       if (roleEl) {
         if (isAdmin) {
-          roleEl.textContent = "🛡️ أدمن";
-          roleEl.style.color = "#a855f7";
-          roleEl.style.background = "rgba(124,58,237,.15)";
-          roleEl.style.border = "1px solid rgba(124,58,237,.35)";
-          let adminBtn = document.getElementById("profileAdminBtn");
-          if (!adminBtn) {
-            adminBtn = document.createElement("a");
-            adminBtn.id = "profileAdminBtn";
-            adminBtn.href = "admin.html";
-            adminBtn.style.cssText = "display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:50px;margin-top:6px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-size:.88rem;font-weight:700;text-decoration:none;";
-            adminBtn.innerHTML = `<i class="fas fa-cog"></i> لوحة الأدمن`;
-            profileEl.appendChild(adminBtn);
-          }
-          adminBtn.hidden = false;
+          // الأدمن — لا نعرض أي مؤشر ظاهر، فقط نوجهه للوحة التحكم مباشرة
+          roleEl.hidden = true;
+          closeAccount();
+          window.location.href = "admin.html";
+          return;
         } else {
+          roleEl.hidden = false;
           roleEl.textContent = "👤 زبون";
           roleEl.style.color = "#9d9bc0";
           roleEl.style.background = "rgba(255,255,255,.06)";
@@ -783,6 +775,8 @@ function openAccount() {
 function closeAccount() {
   const o = document.getElementById("accountOverlay");
   if (o) o.hidden = true;
+  // تحديث القائمة بعد إغلاق المودال
+  updateAccountButton();
 }
 
 // ── تسجيل الزبون (اسم + إيميل) ──────────────────────
@@ -829,20 +823,19 @@ function submitAccountForm(e) {
       if (data.token) setAuthToken(data.token);
       const user = data.user || { name, email, role: "customer" };
       saveStore("fs-user", user);
-      updateAccountButton();
       closeAccount();
+      updateAccountButton();  // تحديث القائمة فوراً
       showToast(`✅ أهلاً ${name}!`, "success");
     })
     .catch(() => {
       // fallback محلي
       saveStore("fs-user", { name, email, role: "customer" });
-      updateAccountButton();
       closeAccount();
+      updateAccountButton();  // تحديث القائمة فوراً
       showToast(`✅ أهلاً ${name}!`, "success");
     });
 }
-  registerUser(e);
-}
+
 /* ==========================
    CHAT — يُخزن في localStorage
    ويظهر في لوحة الأدمن
