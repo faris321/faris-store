@@ -1184,6 +1184,7 @@ function loadReviews() {
             <span style="font-size:.85rem;letter-spacing:.05em">${"⭐".repeat(Math.min(5, Number(r.rating) || 5))}</span>
           </div>
           <p class="review-text" style="font-size:.88rem;color:var(--text-muted);line-height:1.55;margin:0;">${escHtml(r.text)}</p>
+          <span style="font-size:.72rem;color:var(--text-muted);opacity:.6;">${new Date(r.at).toLocaleDateString("ar-SA")}</span>
         </div>
       `).join("");
     })

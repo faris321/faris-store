@@ -13,6 +13,23 @@ const crypto = require("crypto");
 
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = __dirname;
+const DATA_DIR = path.join(ROOT, "data");
+
+// ── تأكد من وجود مجلد data ──────────────────────────
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
+
+// ── قراءة/كتابة ملفات JSON ──────────────────────────
+function readDataFile(name, def) {
+  try {
+    const p = path.join(DATA_DIR, name);
+    if (!fs.existsSync(p)) return def;
+    return JSON.parse(fs.readFileSync(p, "utf8"));
+  } catch { return def; }
+}
+function writeDataFile(name, data) {
+  try { fs.writeFileSync(path.join(DATA_DIR, name), JSON.stringify(data, null, 2), "utf8"); }
+  catch(e) { console.error("writeDataFile error:", e.message); }
+}
 
 // ── بيانات الأدمن (hash لكلمة المرور) ──────────────
 function hashStr(s) {
@@ -28,7 +45,9 @@ const users         = new Map(); // email → { name, email, role, createdAt }
 const sessions      = new Map(); // token → { email, role, expiresAt }
 const orders        = [];        // قائمة الطلبات
 const conversations = new Map(); // convId → { name, email, messages, unread, at }
-const reviews       = [];
+
+// الآراء — محملة من الملف عند البدء
+const reviews = readDataFile("reviews.json", []);
 
 let orderSeq = 0;
 const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
@@ -225,12 +244,29 @@ async function handleApi(req, res, pathname) {
   // ── آراء ──
   if (pathname === "/api/reviews/add" && req.method === "POST") {
     let b; try { b = await readJson(req); } catch(e) { return json(res,400,{error:e.message}); }
-    reviews.push({ id:crypto.randomUUID(), name:String(b.name||"").slice(0,40),
-      rating:Number(b.rating||5), text:String(b.text||"").slice(0,500), at:new Date().toISOString() });
+    const name   = String(b.name  || "").trim().slice(0, 40);
+    const text   = String(b.text  || "").trim().slice(0, 500);
+    const rating = Math.min(5, Math.max(1, Number(b.rating) || 5));
+    if (!name || !text) return json(res, 400, { error: "أدخل الاسم والرأي" });
+    const review = { id: crypto.randomUUID(), name, rating, text, at: new Date().toISOString() };
+    reviews.unshift(review);
+    if (reviews.length > 200) reviews.pop();
+    writeDataFile("reviews.json", reviews);
     return json(res, 200, { ok: true });
   }
   if (pathname === "/api/reviews/list" && req.method === "GET") {
-    return json(res, 200, { reviews: reviews.slice().reverse().slice(0,20) });
+    return json(res, 200, { reviews: reviews.slice(0, 20) });
+  }
+  // ── حذف رأي (أدمن): POST /api/reviews/delete { id } ──
+  if (pathname === "/api/reviews/delete" && req.method === "POST") {
+    const s = getSession(req);
+    if (!s || s.role !== "admin") return json(res, 403, { error: "غير مصرح" });
+    let b; try { b = await readJson(req); } catch(e) { return json(res,400,{error:e.message}); }
+    const idx = reviews.findIndex(r => r.id === b.id);
+    if (idx === -1) return json(res, 404, { error: "الرأي غير موجود" });
+    reviews.splice(idx, 1);
+    writeDataFile("reviews.json", reviews);
+    return json(res, 200, { ok: true });
   }
 
   return json(res, 404, { error: "المسار غير موجود" });

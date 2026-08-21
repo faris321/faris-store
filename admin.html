@@ -197,6 +197,7 @@
   <div class="nav-item" id="nav-orders" onclick="switchPage('orders')"><i class="fas fa-box"></i> الطلبات<span class="nbadge" id="ordersBadge" hidden>0</span></div>
   <div class="nav-item" id="nav-chats" onclick="switchPage('chats')"><i class="fas fa-comments"></i> المحادثات<span class="nbadge" id="unreadBadge" hidden>0</span></div>
   <div class="nav-item" id="nav-users" onclick="switchPage('users')"><i class="fas fa-users"></i> المستخدمون</div>
+  <div class="nav-item" id="nav-reviews" onclick="switchPage('reviews')"><i class="fas fa-star"></i> الآراء</div>
   <div style="padding:0 8px 8px;margin-top:auto;"><a class="nav-item" href="index.html" style="text-decoration:none"><i class="fas fa-store"></i> المتجر</a></div>
   <div class="s-footer">
     <div class="u-chip">
@@ -247,6 +248,14 @@
       <table><thead><tr><th>الاسم</th><th>الجوال</th><th>الرتبة</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="usersTable"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">لا يوجد مستخدمون</td></tr></tbody></table>
     </div>
   </div>
+
+  <div class="page" id="page-reviews">
+    <div class="panel">
+      <div class="ph"><h3>⭐ آراء العملاء</h3><button class="refresh-btn" onclick="loadAdminReviews()"><i class="fas fa-sync-alt"></i></button></div>
+      <table><thead><tr><th>الاسم</th><th>التقييم</th><th>الرأي</th><th>التاريخ</th><th>إجراء</th></tr></thead>
+      <tbody id="reviewsTable"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">لا توجد آراء</td></tr></tbody></table>
+    </div>
+  </div>
 </div>
 
 <div class="modal-ov" id="addUserModal">
@@ -263,7 +272,7 @@
 
 <script>
 var KEYS={auth:"fs-admin-auth",convs:"fs-conversations",users:"fs-users",orders:"fs-order-seq"};
-var PAGE_TITLES={overview:"نظرة عامة",orders:"الطلبات",chats:"المحادثات",users:"المستخدمون"};
+var PAGE_TITLES={overview:"نظرة عامة",orders:"الطلبات",chats:"المحادثات",users:"المستخدمون",reviews:"آراء العملاء"};
 var activeConvId=null,pollTimer=null,toastTimer=null;
 function hashStr(s){var h=0;for(var i=0;i<s.length;i++)h=Math.imul(31,h)+s.charCodeAt(i)|0;return h.toString(36);}
 var PW_HASH=hashStr("otaibi511@");
@@ -295,7 +304,7 @@ document.getElementById("pwInput").addEventListener("keydown",function(e){if(e.k
 function logout(){localStorage.removeItem(KEYS.auth);location.reload();}
 (function boot(){var auth=load(KEYS.auth,null);if(auth&&auth.at&&Date.now()-auth.at<12*60*60*1000){document.getElementById("loginScreen").style.display="none";initDashboard();}})();
 function initDashboard(){loadOverview();startPolling();}
-function switchPage(id){document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");});document.querySelectorAll(".nav-item").forEach(function(n){n.classList.remove("active");});var pg=document.getElementById("page-"+id),nv=document.getElementById("nav-"+id);if(pg)pg.classList.add("active");if(nv)nv.classList.add("active");document.getElementById("topbarTitle").textContent=PAGE_TITLES[id]||id;if(id==="chats")renderConvList();if(id==="users")renderUsers();if(id==="overview")loadOverview();if(id==="orders")loadOrders();}
+function switchPage(id){document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");});document.querySelectorAll(".nav-item").forEach(function(n){n.classList.remove("active");});var pg=document.getElementById("page-"+id),nv=document.getElementById("nav-"+id);if(pg)pg.classList.add("active");if(nv)nv.classList.add("active");document.getElementById("topbarTitle").textContent=PAGE_TITLES[id]||id;if(id==="chats")renderConvList();if(id==="users")renderUsers();if(id==="overview")loadOverview();if(id==="orders")loadOrders();if(id==="reviews")loadAdminReviews();}
 function refreshCurrent(){var a=document.querySelector(".page.active");if(a)switchPage(a.id.replace("page-",""));}
 function loadOverview(){
   var token=localStorage.getItem("fs-token");
@@ -603,6 +612,33 @@ function openAddUser(){document.getElementById("addUserModal").classList.add("op
 function closeModal(id){document.getElementById(id).classList.remove("open");}
 document.getElementById("addUserModal").addEventListener("click",function(e){if(e.target===this)closeModal("addUserModal");});
 function saveManualUser(){var name=document.getElementById("addName").value.trim(),phone=document.getElementById("addPhone").value.trim(),role=document.getElementById("addRole").value;if(!name){showToast("⚠️ أدخل الاسم","error");return;}var users=load(KEYS.users,{}),key=phone||name;users[key]={name:name,phone:phone||"",role:role,lastSeen:new Date().toISOString(),addedByAdmin:true};save(KEYS.users,users);closeModal("addUserModal");document.getElementById("addName").value="";document.getElementById("addPhone").value="";document.getElementById("addRole").value="customer";showToast("✅ تم إضافة "+name);renderUsers();loadOverview();}
+function loadAdminReviews(){
+  var tbody=document.getElementById("reviewsTable");
+  if(!tbody)return;
+  fetch("/api/reviews/list")
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var list=data.reviews||[];
+      if(!list.length){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">لا توجد آراء</td></tr>';return;}
+      tbody.innerHTML=list.map(function(r){
+        return'<tr>'
+          +'<td><strong>'+esc(r.name)+'</strong></td>'
+          +'<td style="letter-spacing:.05em">'+"⭐".repeat(Math.min(5,Number(r.rating)||5))+'</td>'
+          +'<td style="color:var(--muted);font-size:.85rem;max-width:300px">'+esc(r.text)+'</td>'
+          +'<td style="font-size:.76rem;color:var(--muted)">'+fmtTime(r.at)+'</td>'
+          +'<td><button class="btn btn-danger btn-sm" onclick="deleteReview(\''+esc(r.id)+'\')"><i class="fas fa-trash"></i></button></td>'
+        +'</tr>';
+      }).join("");
+    })
+    .catch(function(){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">فشل التحميل</td></tr>';});
+}
+function deleteReview(id){
+  if(!confirm("هل تريد حذف هذا الرأي؟"))return;
+  var token=localStorage.getItem("fs-token");
+  fetch("/api/reviews/delete",{method:"POST",headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},body:JSON.stringify({id:id})})
+    .then(function(){showToast("🗑️ تم حذف الرأي");loadAdminReviews();})
+    .catch(function(){showToast("⚠️ فشل الحذف","error");});
+}
 function startPolling(){
   clearInterval(pollTimer);
   pollTimer=setInterval(function(){
