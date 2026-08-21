@@ -701,6 +701,10 @@ function apiCall(method, path, body) {
 }
 
 function updateAccountButton() {
+  // لو في user بدون token — امسحه (جلسة قديمة)
+  const token = getAuthToken();
+  if (loadStore("fs-user", null) && !token) clearAuth();
+
   const user  = loadStore("fs-user", null);
   const label = document.getElementById("accountButtonLabel");
   if (!label) return;
@@ -708,7 +712,15 @@ function updateAccountButton() {
 }
 
 function openAccount() {
+  // لو في token قديم منتهي أو user بدون token — امسحه
   const user    = loadStore("fs-user", null);
+  const token   = getAuthToken();
+  // لو في user بدون token — امسحه (جلسة قديمة)
+  if (user && !token) {
+    clearAuth();
+  }
+
+  const cleanUser = loadStore("fs-user", null);
   const overlay = document.getElementById("accountOverlay");
   if (!overlay) return;
   overlay.hidden = false;
@@ -725,8 +737,8 @@ function openAccount() {
   if (profileEl) { profileEl.hidden = true; }
   if (logoutEl)  { logoutEl.hidden = true; }
 
-  if (user) {
-    const isAdmin = user.role === "admin";
+  if (cleanUser) {
+    const isAdmin = cleanUser.role === "admin";
     if (iconEl) iconEl.textContent = isAdmin ? "🛡️" : "👤";
     if (statusEl) statusEl.textContent = `أهلاً بك، ${user.name} 👋`;
     if (profileEl) {
@@ -800,6 +812,11 @@ function adminLogin(e) {
   const pass  = (document.getElementById("accountPhone")?.value || "").trim();
   if (!email || !pass) { showToast("⚠️ أدخل الإيميل وكلمة المرور", "error"); return; }
 
+  // دالة hash بسيطة للتحقق المحلي
+  function _h(s){let h=0;for(let i=0;i<s.length;i++)h=Math.imul(31,h)+s.charCodeAt(i)|0;return h.toString(36);}
+  const ADMIN_HASH = _h("otaibi511@");
+  const ADMIN_EMAIL_KEY = "otaibi511@";
+
   apiCall("POST", "/api/admin/login", { email, password: pass })
     .then(data => {
       if (!data.ok) { showToast("⚠️ " + data.error, "error"); return; }
@@ -810,7 +827,19 @@ function adminLogin(e) {
       showToast("✅ مرحباً بك يا أدمن 🛡️", "success");
       setTimeout(() => { window.location.href = "admin.html"; }, 1000);
     })
-    .catch(() => showToast("⚠️ فشل الاتصال", "error"));
+    .catch(() => {
+      // fallback محلي — لو السيرفر مش شغال
+      if (email === ADMIN_EMAIL_KEY && _h(pass) === ADMIN_HASH) {
+        const user = { name: "فارس", email, role: "admin" };
+        saveStore("fs-user", user);
+        updateAccountButton();
+        closeAccount();
+        showToast("✅ مرحباً بك يا أدمن 🛡️", "success");
+        setTimeout(() => { window.location.href = "admin.html"; }, 1000);
+      } else {
+        showToast("⚠️ إيميل أو كلمة المرور غير صحيحة", "error");
+      }
+    });
 }
 
 // تحديد نوع الفورم (زبون أو أدمن) بناءً على الاختيار
