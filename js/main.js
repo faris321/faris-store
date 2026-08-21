@@ -353,24 +353,30 @@ const hamburger   = document.getElementById("hamburger");
 const navLinks    = document.getElementById("navLinks");
 const scrollTopBtn = document.getElementById("scrollTop");
 
-window.addEventListener("scroll", () => {
-  header.classList.toggle("scrolled", window.scrollY > 50);
-  scrollTopBtn.classList.toggle("visible", window.scrollY > 400);
-});
-
-hamburger.addEventListener("click", () => {
-  hamburger.classList.toggle("active");
-  navLinks.classList.toggle("open");
-});
-
-navLinks.querySelectorAll("a").forEach(link => {
-  link.addEventListener("click", () => {
-    hamburger.classList.remove("active");
-    navLinks.classList.remove("open");
+if (header && scrollTopBtn) {
+  window.addEventListener("scroll", () => {
+    header.classList.toggle("scrolled", window.scrollY > 50);
+    scrollTopBtn.classList.toggle("visible", window.scrollY > 400);
   });
-});
+}
 
-scrollTopBtn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+if (hamburger && navLinks) {
+  hamburger.addEventListener("click", () => {
+    hamburger.classList.toggle("active");
+    navLinks.classList.toggle("open");
+  });
+
+  navLinks.querySelectorAll("a").forEach(link => {
+    link.addEventListener("click", () => {
+      hamburger.classList.remove("active");
+      navLinks.classList.remove("open");
+    });
+  });
+}
+
+if (scrollTopBtn) {
+  scrollTopBtn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+}
 
 /* ==========================
    ORDER MODAL
@@ -1263,7 +1269,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // تهيئة اللغة والعملة من الذاكرة
   const savedCurrency = localStorage.getItem("fs-currency") || "both";
-  document.getElementById("currencySelect").value = savedCurrency;
+  const currencyEl = document.getElementById("currencySelect");
+  if (currencyEl) currencyEl.value = savedCurrency;
   setCurrency(savedCurrency);
   applyLang();
 
