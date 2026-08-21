@@ -1112,6 +1112,18 @@ body {
   border-color: var(--accent);
 }
 
+/* STC Pay */
+.payment-option-stc:has(input:checked) {
+  border-color: #9c27b0;
+  box-shadow: 0 0 0 2px rgba(123,31,162,.2);
+}
+
+.payment-option-stc:has(input:checked) .payment-option-check {
+  background: #9c27b0;
+  border-color: #9c27b0;
+  color: var(--white);
+}
+
 /* Modal divider */
 .modal-divider {
   display: flex;

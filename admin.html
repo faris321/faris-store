@@ -194,6 +194,7 @@
   <div class="s-logo">🎮 فارس <span class="ac">ستور</span></div>
   <div class="nav-sec">القائمة</div>
   <div class="nav-item active" id="nav-overview" onclick="switchPage('overview')"><i class="fas fa-chart-line"></i> نظرة عامة</div>
+  <div class="nav-item" id="nav-orders" onclick="switchPage('orders')"><i class="fas fa-box"></i> الطلبات<span class="nbadge" id="ordersBadge" hidden>0</span></div>
   <div class="nav-item" id="nav-chats" onclick="switchPage('chats')"><i class="fas fa-comments"></i> المحادثات<span class="nbadge" id="unreadBadge" hidden>0</span></div>
   <div class="nav-item" id="nav-users" onclick="switchPage('users')"><i class="fas fa-users"></i> المستخدمون</div>
   <div style="padding:0 8px 8px;margin-top:auto;"><a class="nav-item" href="index.html" style="text-decoration:none"><i class="fas fa-store"></i> المتجر</a></div>
@@ -232,6 +233,14 @@
       </div>
     </div>
   </div>
+  <div class="page" id="page-orders">
+    <div class="panel">
+      <div class="ph"><h3>📦 الطلبات</h3><button class="refresh-btn" onclick="loadOrders()"><i class="fas fa-sync-alt"></i></button></div>
+      <table><thead><tr><th>رقم الطلب</th><th>المنتج</th><th>الزبون</th><th>الدفع</th><th>السعر</th><th>الحالة</th><th>التاريخ</th></tr></thead>
+      <tbody id="ordersTable"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">لا توجد طلبات</td></tr></tbody></table>
+    </div>
+  </div>
+
   <div class="page" id="page-users">
     <div class="panel">
       <div class="ph"><h3>👥 المستخدمون</h3><button class="btn btn-primary btn-sm" onclick="openAddUser()"><i class="fas fa-user-shield"></i> إضافة</button></div>
@@ -254,7 +263,7 @@
 
 <script>
 var KEYS={auth:"fs-admin-auth",convs:"fs-conversations",users:"fs-users",orders:"fs-order-seq"};
-var PAGE_TITLES={overview:"نظرة عامة",chats:"المحادثات",users:"المستخدمون"};
+var PAGE_TITLES={overview:"نظرة عامة",orders:"الطلبات",chats:"المحادثات",users:"المستخدمون"};
 var activeConvId=null,pollTimer=null,toastTimer=null;
 function hashStr(s){var h=0;for(var i=0;i<s.length;i++)h=Math.imul(31,h)+s.charCodeAt(i)|0;return h.toString(36);}
 var PW_HASH=hashStr("otaibi511@");
@@ -263,15 +272,121 @@ function load(key,def){try{var v=JSON.parse(localStorage.getItem(key));return v!
 function save(key,val){localStorage.setItem(key,JSON.stringify(val));}
 function showToast(msg,type){var t=document.getElementById("toast");t.textContent=msg;t.className="show"+(type==="error"?" error":type==="warn"?" warn":"");clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.className="";},3500);}
 function togglePw(){var i=document.getElementById("pwInput"),e=document.getElementById("pwEye");if(i.type==="password"){i.type="text";e.className="fas fa-eye-slash";}else{i.type="password";e.className="fas fa-eye";}}
-function tryLogin(){var val=document.getElementById("pwInput").value;if(hashStr(val)===PW_HASH||hashStr(val)===PW_HASH2){save(KEYS.auth,{at:Date.now()});document.getElementById("loginScreen").style.display="none";initDashboard();}else{var err=document.getElementById("pwErr");err.textContent="⛔ كلمة المرور غير صحيحة";document.getElementById("pwInput").value="";setTimeout(function(){err.textContent="";},3000);}}
+function tryLogin(){
+  var val=document.getElementById("pwInput").value;
+  if(hashStr(val)===PW_HASH||hashStr(val)===PW_HASH2){
+    save(KEYS.auth,{at:Date.now()});
+    document.getElementById("loginScreen").style.display="none";
+    initDashboard();
+    // حاول السيرفر في الخلفية للحصول على token
+    fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:"otaibi511@",password:val})})
+      .then(function(r){return r.json();})
+      .then(function(d){if(d.token)localStorage.setItem("fs-token",d.token);})
+      .catch(function(){});
+  } else {
+    var err=document.getElementById("pwErr");
+    err.textContent="⛔ كلمة المرور غير صحيحة";
+    document.getElementById("pwInput").value="";
+    document.getElementById("pwInput").focus();
+    setTimeout(function(){err.textContent="";},3000);
+  }
+}
 document.getElementById("pwInput").addEventListener("keydown",function(e){if(e.key==="Enter")tryLogin();});
 function logout(){localStorage.removeItem(KEYS.auth);location.reload();}
 (function boot(){var auth=load(KEYS.auth,null);if(auth&&auth.at&&Date.now()-auth.at<12*60*60*1000){document.getElementById("loginScreen").style.display="none";initDashboard();}})();
 function initDashboard(){loadOverview();startPolling();}
-function switchPage(id){document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");});document.querySelectorAll(".nav-item").forEach(function(n){n.classList.remove("active");});var pg=document.getElementById("page-"+id),nv=document.getElementById("nav-"+id);if(pg)pg.classList.add("active");if(nv)nv.classList.add("active");document.getElementById("topbarTitle").textContent=PAGE_TITLES[id]||id;if(id==="chats")renderConvList();if(id==="users")renderUsers();if(id==="overview")loadOverview();}
+function switchPage(id){document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");});document.querySelectorAll(".nav-item").forEach(function(n){n.classList.remove("active");});var pg=document.getElementById("page-"+id),nv=document.getElementById("nav-"+id);if(pg)pg.classList.add("active");if(nv)nv.classList.add("active");document.getElementById("topbarTitle").textContent=PAGE_TITLES[id]||id;if(id==="chats")renderConvList();if(id==="users")renderUsers();if(id==="overview")loadOverview();if(id==="orders")loadOrders();}
 function refreshCurrent(){var a=document.querySelector(".page.active");if(a)switchPage(a.id.replace("page-",""));}
-function loadOverview(){var convs=load(KEYS.convs,{}),users=load(KEYS.users,{}),orders=Number(localStorage.getItem(KEYS.orders)||0),list=Object.values(convs),unread=list.reduce(function(s,c){return s+(c.unread||0);},0);document.getElementById("stConvs").textContent=list.length;document.getElementById("stUnread").textContent=unread;document.getElementById("stUsers").textContent=Object.keys(users).length;document.getElementById("stOrders").textContent=orders;updateUnreadBadge(unread);var real=list.filter(function(c){return(c.messages||[]).length>0;}).sort(function(a,b){return(b.at||0)-(a.at||0);});var tbody=document.getElementById("ovTable");if(!real.length){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">لا توجد محادثات</td></tr>';return;}tbody.innerHTML=real.slice(0,8).map(function(c){var msgs=(c.messages||[]).filter(function(m){return m.text!=="__linked__";});var last=msgs[msgs.length-1];return'<tr><td><strong>'+esc(c.name||"زائر")+'</strong>'+(c.orderRef?'<span style="margin-right:6px;font-size:.72rem;color:var(--accent);font-weight:800">#'+esc(c.orderRef)+'</span>':'')+(c.unread?'<span class="nbadge" style="display:inline-flex">'+c.unread+'</span>':'')+'</td><td style="color:var(--muted);font-size:.82rem">'+(last?esc(last.text.slice(0,50)):'—')+'</td><td style="color:var(--muted);font-size:.76rem">'+(last?fmtTime(last.at):'—')+'</td><td><button class="btn btn-primary btn-sm" onclick="goToConv(\''+esc(c.id)+'\')"><i class="fas fa-reply"></i> فتح</button></td></tr>';}).join("");}
+function loadOverview(){
+  var convs=load(KEYS.convs,{}),users=load(KEYS.users,{}),list=Object.values(convs),unread=list.reduce(function(s,c){return s+(c.unread||0);},0);
+  document.getElementById("stConvs").textContent=list.length;
+  document.getElementById("stUnread").textContent=unread;
+  document.getElementById("stUsers").textContent=Object.keys(users).length;
+  updateUnreadBadge(unread);
+
+  // جلب الطلبات من السيرفر
+  var token=localStorage.getItem("fs-token");
+  fetch("/api/orders",{headers:token?{Authorization:"Bearer "+token}:{}})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var orders=data.orders||[];
+      document.getElementById("stOrders").textContent=orders.length;
+      var pending=orders.filter(function(o){return o.status==="pending";}).length;
+      var badge=document.getElementById("ordersBadge");
+      if(badge){badge.textContent=pending;badge.hidden=pending===0;}
+    }).catch(function(){});
+
+  var real=list.filter(function(c){return(c.messages||[]).length>0;}).sort(function(a,b){return(b.at||0)-(a.at||0);});
+  var tbody=document.getElementById("ovTable");
+  if(!real.length){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">لا توجد محادثات</td></tr>';return;}
+  tbody.innerHTML=real.slice(0,8).map(function(c){var msgs=(c.messages||[]).filter(function(m){return m.text!=="__linked__";});var last=msgs[msgs.length-1];return'<tr><td><strong>'+esc(c.name||"زائر")+'</strong>'+(c.orderRef?'<span style="margin-right:6px;font-size:.72rem;color:var(--accent);font-weight:800">#'+esc(c.orderRef)+'</span>':'')+(c.unread?'<span class="nbadge" style="display:inline-flex">'+c.unread+'</span>':'')+'</td><td style="color:var(--muted);font-size:.82rem">'+(last?esc(last.text.slice(0,50)):'—')+'</td><td style="color:var(--muted);font-size:.76rem">'+(last?fmtTime(last.at):'—')+'</td><td><button class="btn btn-primary btn-sm" onclick="goToConv(\''+esc(c.id)+'\')"><i class="fas fa-reply"></i> فتح</button></td></tr>';}).join("");
+}
 function goToConv(convId){switchPage("chats");setTimeout(function(){openConv(convId);},80);}
+
+// ═══ Orders ═══
+function loadOrders(){
+  var tbody=document.getElementById("ordersTable");
+  if(!tbody)return;
+  tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px"><span style="color:var(--muted)">جاري التحميل...</span></td></tr>';
+
+  var token=localStorage.getItem("fs-token");
+  fetch("/api/orders",{headers:token?{Authorization:"Bearer "+token}:{}})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var serverOrders=data.orders||[];
+      // دمج مع الطلبات المحلية
+      var localOrders=JSON.parse(localStorage.getItem("fs-admin-orders")||"[]");
+      // ادمج وازل التكرار برقم الطلب
+      var merged={};
+      localOrders.forEach(function(o){if(o.orderNumber)merged[o.orderNumber]=o;});
+      serverOrders.forEach(function(o){if(o.orderNumber)merged[o.orderNumber]=o;});
+      var orders=Object.values(merged).sort(function(a,b){return new Date(b.createdAt)-new Date(a.createdAt);});
+      renderOrdersTable(orders);
+    })
+    .catch(function(){
+      // fallback محلي فقط
+      var localOrders=JSON.parse(localStorage.getItem("fs-admin-orders")||"[]");
+      renderOrdersTable(localOrders);
+    });
+}
+function renderOrdersTable(orders){
+  var tbody=document.getElementById("ordersTable");
+  if(!tbody)return;
+  document.getElementById("stOrders").textContent=orders.length;
+  var pending=orders.filter(function(o){return o.status==="pending";}).length;
+  var badge=document.getElementById("ordersBadge");
+  if(badge){badge.textContent=pending;badge.hidden=pending===0;}
+  if(!orders.length){
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">لا توجد طلبات</td></tr>';
+    return;
+  }
+  tbody.innerHTML=orders.map(function(o){
+    var sc=o.status==="done"?"var(--success)":o.status==="cancelled"?"var(--danger)":"var(--accent)";
+    var sl=o.status==="done"?"✅ مكتمل":o.status==="cancelled"?"❌ ملغي":"⏳ قيد التحضير";
+    return'<tr>'+
+      '<td><strong style="color:var(--accent);font-size:.9rem">'+esc(o.orderNumber)+'</strong></td>'+
+      '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(o.product)+'<br><span style="font-size:.72rem;color:var(--muted)">'+esc(o.priceUSD)+'</span></td>'+
+      '<td><div style="font-weight:700">'+esc(o.userName||"زائر")+'</div>'+
+        (o.userEmail?'<div style="font-size:.72rem;color:var(--muted)">'+esc(o.userEmail)+'</div>':'')+
+      '</td>'+
+      '<td style="color:var(--cyan);font-weight:700">'+esc(o.contact)+'</td>'+
+      '<td>'+esc(o.payment)+'</td>'+
+      '<td><span style="color:'+sc+';font-size:.82rem;font-weight:700">'+sl+'</span></td>'+
+      '<td style="font-size:.72rem;color:var(--muted)">'+fmtTime(o.createdAt)+'</td>'+
+      '<td>'+
+        '<button class="btn btn-success btn-sm" onclick="setOrderStatus(\''+esc(o.orderNumber)+'\',\'done\')" title="مكتمل"><i class="fas fa-check"></i></button> '+
+        '<button class="btn btn-danger btn-sm" onclick="setOrderStatus(\''+esc(o.orderNumber)+'\',\'cancelled\')" title="ملغي"><i class="fas fa-times"></i></button>'+
+      '</td>'+
+    '</tr>';
+  }).join("");
+}
+function setOrderStatus(orderNumber,status){
+  var orders=JSON.parse(localStorage.getItem("fs-admin-orders")||"[]");
+  orders=orders.map(function(o){if(o.orderNumber===orderNumber)o.status=status;return o;});
+  localStorage.setItem("fs-admin-orders",JSON.stringify(orders));
+  showToast(status==="done"?"✅ تم تحديد الطلب كمكتمل":"❌ تم إلغاء الطلب");
+  loadOrders();
+}
 function renderConvList(){var convs=load(KEYS.convs,{}),changed=false;Object.keys(convs).forEach(function(k){if(!convs[k].id){convs[k].id=k;changed=true;}if(!convs[k].messages){convs[k].messages=[];changed=true;}});if(changed)save(KEYS.convs,convs);var list=Object.values(convs).sort(function(a,b){return(b.at||0)-(a.at||0);});var el=document.getElementById("convList");if(!el)return;if(!list.length){el.innerHTML='<div class="conv-empty">لا توجد محادثات بعد 💬</div>';return;}el.innerHTML=list.map(function(c){var msgs=(c.messages||[]).filter(function(m){return m.text!=="__linked__";});var last=msgs[msgs.length-1],cid=c.id;return'<div class="conv-item '+(cid===activeConvId?"active":"")+'" onclick="openConv(\''+esc(cid)+'\')">'+'<div class="conv-av" style="'+(c.mutedBuyer?"opacity:.4":"")+'">'+(c.name||"ز").charAt(0)+'</div>'+'<div class="conv-meta"><div class="conv-name">'+(c.hiddenFromBuyer?'<i class="fas fa-eye-slash" style="font-size:.7rem;color:var(--pl);margin-left:4px"></i>':'')+(c.mutedBuyer?'<i class="fas fa-volume-mute" style="font-size:.7rem;color:var(--danger);margin-left:4px"></i>':'')+esc(c.name||"زائر")+(c.orderRef?'<span style="margin-right:5px;font-size:.7rem;color:var(--accent);font-weight:800">#'+esc(c.orderRef)+'</span>':'')+'</div><div class="conv-prev">'+(last?esc(last.text):"لا توجد رسائل")+'</div></div>'+'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px"><span class="conv-time">'+(last?fmtTime(last.at):"")+'</span>'+((c.unread||0)>0?'<span class="conv-unread">'+c.unread+'</span>':'')+'</div></div>';}).join("");}
 function openConv(convId){activeConvId=convId;renderConvList();var convs=load(KEYS.convs,{}),conv=convs[convId];if(!conv)return;conv.unread=0;save(KEYS.convs,convs);updateUnreadBadge(Object.values(convs).reduce(function(s,c){return s+(c.unread||0);},0));loadOverview();renderChatWindow(conv);}
 function renderChatWindow(conv){var win=document.getElementById("chatWin");if(!win)return;var isHidden=conv.hiddenFromBuyer||false,isMuted=conv.mutedBuyer||false;var header='<div class="cw-header"><div class="conv-av">'+(conv.name||"ز").charAt(0)+'</div><div style="flex:1"><div class="cw-name">'+esc(conv.name||"زائر")+(conv.orderRef?'<span style="margin-right:8px;font-size:.75rem;color:var(--accent);font-weight:700">#'+esc(conv.orderRef)+'</span>':'')+'</div><div class="cw-sub">محادثة دعم</div></div><div class="cw-actions"><button class="btn btn-sm '+(isHidden?"btn-success":"btn-ghost")+'" onclick="toggleHide(\''+esc(conv.id)+'\')">'+'<i class="fas fa-'+(isHidden?"eye":"eye-slash")+'"></i>'+(isHidden?"إظهار":"إخفاء")+'</button><button class="btn btn-sm '+(isMuted?"btn-success":"btn-danger")+'" onclick="toggleMute(\''+esc(conv.id)+'\')">'+'<i class="fas fa-'+(isMuted?"volume-up":"volume-mute")+'"></i>'+(isMuted?"رفع المنع":"منع")+'</button><button class="btn btn-warn btn-sm" onclick="setOrderRef(\''+esc(conv.id)+'\')"><i class="fas fa-hashtag"></i></button><button class="btn btn-danger btn-sm" onclick="deleteConv(\''+esc(conv.id)+'\')"><i class="fas fa-trash"></i></button></div></div>';var banners="";if(isHidden)banners+='<div class="hidden-banner"><i class="fas fa-eye-slash"></i> مخفية عن الزبون</div>';if(isMuted)banners+='<div class="muted-banner"><i class="fas fa-volume-mute"></i> الزبون ممنوع من الإرسال</div>';var msgs=(conv.messages||[]).filter(function(m){return m.text!=="__linked__";});var msgsHtml=msgs.length===0?'<div class="cw-empty"><i class="fas fa-comment-slash"></i><span>لا توجد رسائل</span></div>':msgs.map(function(m){var imp=m.important||false;return'<div class="msg '+m.from+(imp?" important":"")+'">'+'<button class="msg-del" onclick="deleteMsg(\''+esc(conv.id)+'\',\''+esc(m.id)+'\')" title="حذف"><i class="fas fa-times"></i></button>'+'<button class="msg-del" style="left:20px" onclick="toggleImportant(\''+esc(conv.id)+'\',\''+esc(m.id)+'\')" title="تمييز"><i class="fas fa-star" style="color:'+(imp?"var(--accent)":"var(--muted)")+'"></i></button>'+'<span class="msg-from">'+(m.from==="buyer"?"🧑 "+esc(conv.name||"زائر"):"🛡️ الدعم")+'</span>'+esc(m.text)+'<span class="msg-time">'+fmtTime(m.at)+'</span></div>';}).join("");var replyForm='<form class="cw-reply" onsubmit="sendReply(event,\''+esc(conv.id)+'\')">'+'<input id="replyInp" placeholder="اكتب ردك..." maxlength="500" required autocomplete="off" />'+'<button class="send-btn" type="submit"><i class="fas fa-paper-plane"></i></button></form>';win.innerHTML=header+banners+'<div class="cw-msgs" id="cwMsgs">'+msgsHtml+'</div>'+replyForm;var m=document.getElementById("cwMsgs");if(m)m.scrollTop=m.scrollHeight;}
@@ -324,7 +439,7 @@ function openAddUser(){document.getElementById("addUserModal").classList.add("op
 function closeModal(id){document.getElementById(id).classList.remove("open");}
 document.getElementById("addUserModal").addEventListener("click",function(e){if(e.target===this)closeModal("addUserModal");});
 function saveManualUser(){var name=document.getElementById("addName").value.trim(),phone=document.getElementById("addPhone").value.trim(),role=document.getElementById("addRole").value;if(!name){showToast("⚠️ أدخل الاسم","error");return;}var users=load(KEYS.users,{}),key=phone||name;users[key]={name:name,phone:phone||"",role:role,lastSeen:new Date().toISOString(),addedByAdmin:true};save(KEYS.users,users);closeModal("addUserModal");document.getElementById("addName").value="";document.getElementById("addPhone").value="";document.getElementById("addRole").value="customer";showToast("✅ تم إضافة "+name);renderUsers();loadOverview();}
-function startPolling(){clearInterval(pollTimer);pollTimer=setInterval(function(){var convs=load(KEYS.convs,{}),unread=Object.values(convs).reduce(function(s,c){return s+(c.unread||0);},0);updateUnreadBadge(unread);document.getElementById("stUnread").textContent=unread;document.getElementById("stConvs").textContent=Object.keys(convs).length;if(document.getElementById("page-chats").classList.contains("active"))renderConvList();if(activeConvId&&document.getElementById("page-chats").classList.contains("active")){var conv=convs[activeConvId];if(conv){var msgs=document.getElementById("cwMsgs");if(msgs){var atBottom=msgs.scrollHeight-msgs.scrollTop-msgs.clientHeight<60,visible=(conv.messages||[]).filter(function(m){return m.text!=="__linked__";});msgs.innerHTML=visible.length===0?'<div class="cw-empty"><i class="fas fa-comment-slash"></i><span>لا توجد رسائل</span></div>':visible.map(function(m){var imp=m.important||false;return'<div class="msg '+m.from+(imp?" important":"")+'">'+'<button class="msg-del" onclick="deleteMsg(\''+esc(conv.id)+'\',\''+esc(m.id)+'\')" title="حذف"><i class="fas fa-times"></i></button>'+'<button class="msg-del" style="left:20px" onclick="toggleImportant(\''+esc(conv.id)+'\',\''+esc(m.id)+'\')" title="تمييز"><i class="fas fa-star" style="color:'+(imp?"var(--accent)":"var(--muted)")+'"></i></button>'+'<span class="msg-from">'+(m.from==="buyer"?"🧑 "+esc(conv.name||"زائر"):"🛡️ الدعم")+'</span>'+esc(m.text)+'<span class="msg-time">'+fmtTime(m.at)+'</span></div>';}).join("");if(atBottom)msgs.scrollTop=msgs.scrollHeight;}}}},4000);}
+function startPolling(){clearInterval(pollTimer);pollTimer=setInterval(function(){var convs=load(KEYS.convs,{}),unread=Object.values(convs).reduce(function(s,c){return s+(c.unread||0);},0);updateUnreadBadge(unread);document.getElementById("stUnread").textContent=unread;document.getElementById("stConvs").textContent=Object.keys(convs).length;if(document.getElementById("page-chats").classList.contains("active"))renderConvList();if(document.getElementById("page-orders")&&document.getElementById("page-orders").classList.contains("active"))loadOrders();if(activeConvId&&document.getElementById("page-chats").classList.contains("active")){var conv=convs[activeConvId];if(conv){var msgs=document.getElementById("cwMsgs");if(msgs){var atBottom=msgs.scrollHeight-msgs.scrollTop-msgs.clientHeight<60,visible=(conv.messages||[]).filter(function(m){return m.text!=="__linked__";});msgs.innerHTML=visible.length===0?'<div class="cw-empty"><i class="fas fa-comment-slash"></i><span>لا توجد رسائل</span></div>':visible.map(function(m){var imp=m.important||false;return'<div class="msg '+m.from+(imp?" important":"")+'">'+'<button class="msg-del" onclick="deleteMsg(\''+esc(conv.id)+'\',\''+esc(m.id)+'\')" title="حذف"><i class="fas fa-times"></i></button>'+'<button class="msg-del" style="left:20px" onclick="toggleImportant(\''+esc(conv.id)+'\',\''+esc(m.id)+'\')" title="تمييز"><i class="fas fa-star" style="color:'+(imp?"var(--accent)":"var(--muted)")+'"></i></button>'+'<span class="msg-from">'+(m.from==="buyer"?"🧑 "+esc(conv.name||"زائر"):"🛡️ الدعم")+'</span>'+esc(m.text)+'<span class="msg-time">'+fmtTime(m.at)+'</span></div>';}).join("");if(atBottom)msgs.scrollTop=msgs.scrollHeight;}}}},4000);}
 function updateUnreadBadge(n){var b=document.getElementById("unreadBadge");b.textContent=n;b.hidden=n===0;}
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
 function fmtTime(iso){if(!iso)return"";try{return new Date(iso).toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"});}catch(e){return"";}}

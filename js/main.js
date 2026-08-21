@@ -7,8 +7,8 @@ const WHATSAPP_NUMBER = "966546252805";
 const PAYPAL_ME_URL   = "https://paypal.me/farisstore1";
 
 // ─── Telegram إشعارات الطلبات ─────────────────────────
-const TG_TOKEN   = "8810812697:AAE0f9l1L5MsFuaeA2wcsqpIZBuRKKqwzlM";
-const TG_CHAT_ID = "123156782";
+const TG_TOKEN   = "8352531095:AAHLczHeiNIlTfGkCIWVLIClgisRuu7QEo4";
+const TG_CHAT_ID = "8084788871";
 
 const PAYMENT_ICONS = {
   "Apple Pay":  "🍎",
@@ -20,11 +20,12 @@ const PAYMENT_ICONS = {
 
 // ─── مفاتيح localStorage ──────────────────────────────
 const KEYS = {
-  user:   "fs-user",           // { name } بيانات المستخدم
-  convId: "fs-conv-id",        // conversationId للزبون
-  convs:  "fs-conversations",  // كل المحادثات (تُقرأ من الأدمن)
-  users:  "fs-users",          // قائمة المستخدمين
-  orders: "fs-order-seq",      // عداد الطلبات
+  user:   "fs-user",
+  convId: "fs-conv-id",
+  convs:  "fs-conversations",
+  users:  "fs-users",
+  orders: "fs-order-seq",
+  cart:   "fs-cart-v2",        // سلة التسوق
 };
 
 // ─── Storage helpers ──────────────────────────────────
@@ -33,6 +34,178 @@ function loadStore(key, def = {}) {
   catch { return def; }
 }
 function saveStore(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+
+/* ==========================
+   CART — نظام السلة
+   ========================== */
+function getCart() { 
+  const cart = loadStore(KEYS.cart, []);
+  // تأكد إن كل عنصر صحيح
+  return cart.filter(i => i && i.name && i.qty > 0);
+}
+function saveCart(cart) { saveStore(KEYS.cart, cart.filter(i => i && i.name && i.qty > 0)); updateCartBadge(); }
+
+function addToCart(name, priceUSD, priceSAR, qty = 1) {
+  const cart = getCart();
+  const existing = cart.find(i => i.name === name);
+  if (existing) {
+    existing.qty = Math.min(existing.qty + qty, 99);
+  } else {
+    cart.push({ name, priceUSD, priceSAR, qty });
+  }
+  saveCart(cart);
+  showToast(`✅ أُضيف للسلة: ${name}`, "success");
+}
+
+function removeFromCart(name) {
+  saveCart(getCart().filter(i => i.name !== name));
+}
+
+function updateCartQty(name, qty) {
+  const cart = getCart();
+  const item = cart.find(i => i.name === name);
+  if (!item) return;
+  if (qty < 1) { removeFromCart(name); return; }
+  item.qty = Math.min(qty, 99);
+  saveCart(cart);
+}
+
+function clearCart() { saveCart([]); }
+
+function updateCartBadge() {
+  const cart  = getCart();
+  const total = cart.reduce((s, i) => s + i.qty, 0);
+  const badge = document.getElementById("cartBadge");
+  if (!badge) return;
+  badge.textContent = total;
+  badge.hidden = total === 0;
+  // أيضاً أخفِ زر السلة لو فارغة (اختياري)
+  const cartBtn = document.getElementById("cartBtn");
+  if (cartBtn) cartBtn.style.opacity = total === 0 ? "0.5" : "1";
+}
+
+function openCart() {
+  const panel   = document.getElementById("cartPanel");
+  const overlay = document.getElementById("cartOverlay");
+  if (!panel) return;
+  panel.style.display   = "flex";
+  if (overlay) overlay.style.display = "block";
+  renderCartPanel(getCart());
+  document.body.style.overflow = "hidden";
+}
+
+function closeCart() {
+  const panel   = document.getElementById("cartPanel");
+  const overlay = document.getElementById("cartOverlay");
+  if (panel)   panel.style.display   = "none";
+  if (overlay) overlay.style.display = "none";
+  document.body.style.overflow = "";
+}
+
+function renderCartPanel(cart) {
+  const body   = document.getElementById("cartBody");
+  const footer = document.getElementById("cartFooter");
+  const count  = document.getElementById("cartCount");
+  const total  = document.getElementById("cartTotalVal");
+  if (!body) return;
+
+  const itemCount = cart.reduce((s, i) => s + i.qty, 0);
+  if (count) count.textContent = itemCount ? `(${itemCount})` : "";
+
+  if (!cart.length) {
+    body.innerHTML = `
+      <div style="text-align:center;padding:40px 20px;color:var(--text-muted);">
+        <div style="font-size:3rem;margin-bottom:14px;opacity:.4">🛒</div>
+        <p style="font-size:.9rem;">السلة فارغة</p>
+        <p style="font-size:.8rem;margin-top:6px;opacity:.6;">أضف منتجات بالضغط على "سلة"</p>
+      </div>`;
+    if (footer) { footer.hidden = true; footer.style.display = "none"; }
+    return;
+  }
+
+  // حساب الإجمالي حسب العملة المختارة
+  const currency  = localStorage.getItem("fs-currency") || "both";
+  const totUSD    = cart.reduce((s, i) => s + (parsePrice(i.priceUSD) * i.qty), 0);
+  const totSAR    = cart.reduce((s, i) => s + (parsePrice(i.priceSAR) * i.qty), 0);
+  if (total) {
+    if (currency === "sar")      total.textContent = `${totSAR.toFixed(2)} ريال`;
+    else if (currency === "usd") total.textContent = `$${totUSD.toFixed(2)}`;
+    else                         total.textContent = `$${totUSD.toFixed(2)} | ${totSAR.toFixed(2)} ريال`;
+  }
+
+  body.innerHTML = cart.map((item) => {
+    let priceLabel;
+    if (currency === "sar")      priceLabel = item.priceSAR + " للقطعة";
+    else if (currency === "usd") priceLabel = item.priceUSD + " للقطعة";
+    else                         priceLabel = item.priceUSD + " | " + item.priceSAR + " للقطعة";
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid rgba(255,255,255,.05);">
+      <div style="flex:1;overflow:hidden;">
+        <div style="font-size:.88rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.name}</div>
+        <div style="font-size:.76rem;color:var(--text-muted);margin-top:3px;">${priceLabel}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        <button onclick="updateCartQty('${escHtmlCart(item.name)}',${item.qty-1});renderCartPanel(getCart());"
+          style="width:28px;height:28px;border-radius:50%;border:1px solid rgba(124,58,237,.4);background:rgba(124,58,237,.1);color:#f0eeff;cursor:pointer;font-size:1rem;font-family:var(--font);display:flex;align-items:center;justify-content:center;transition:.2s;">−</button>
+        <span style="min-width:24px;text-align:center;font-weight:800;font-size:.95rem;">${item.qty}</span>
+        <button onclick="updateCartQty('${escHtmlCart(item.name)}',${item.qty+1});renderCartPanel(getCart());"
+          style="width:28px;height:28px;border-radius:50%;border:1px solid rgba(124,58,237,.4);background:rgba(124,58,237,.1);color:#f0eeff;cursor:pointer;font-size:1rem;font-family:var(--font);display:flex;align-items:center;justify-content:center;transition:.2s;">+</button>
+        <button onclick="removeFromCart('${escHtmlCart(item.name)}');renderCartPanel(getCart());"
+          style="width:28px;height:28px;border-radius:50%;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:#ef4444;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center;transition:.2s;margin-right:2px;">
+          <i class="fas fa-times"></i></button>
+      </div>
+    </div>`;
+  }).join("");
+
+  if (footer) { footer.hidden = false; footer.style.display = "flex"; }
+}
+
+function checkoutCart() {
+  const cart = getCart();
+  if (!cart.length) return;
+
+  // بناء رسالة واتساب بالسلة كاملة
+  const user  = loadStore("fs-user", null);
+  const name  = user?.name || "زائر";
+  const lines = cart.map(i => `• ${i.name} × ${i.qty} — ${i.priceUSD}`).join("\n");
+
+  const seq  = Number(localStorage.getItem(KEYS.orders) || 0) + 1;
+  localStorage.setItem(KEYS.orders, String(seq));
+  const date = new Date().toISOString().slice(0,10).replace(/-/g,"");
+  const orderNumber = `FS-${date}-${String(seq).padStart(4,"0")}`;
+
+  const msg = `🛒 *طلب سلة — فارس ستور*\n🧾 *رقم الطلب:* \`${orderNumber}\`\n\n👤 *الاسم:* ${name}\n\n━━━━━━━━━━━━━━━━\n${lines}\n━━━━━━━━━━━━━━━━\n⚡ الحالة: قيد التحضير`;
+
+  // حفظ في admin orders
+  const orderData = {
+    orderNumber,
+    product: cart.map(i => `${i.name} × ${i.qty}`).join(" | "),
+    priceUSD: cart.map(i => i.priceUSD).join(" + "),
+    priceSAR: cart.map(i => i.priceSAR).join(" + "),
+    payment: "—",
+    contact: "—",
+    notes: "",
+    userName: name,
+    userEmail: user?.email || "",
+    status: "pending",
+    createdAt: new Date().toISOString(),
+  };
+  try {
+    const saved = JSON.parse(localStorage.getItem("fs-admin-orders") || "[]");
+    saved.unshift(orderData);
+    localStorage.setItem("fs-admin-orders", JSON.stringify(saved));
+  } catch(e) {}
+
+  sendTelegramNotification(msg);
+  window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, "_blank");
+  closeCart();
+  clearCart();
+  showToast(`✅ تم إرسال الطلب ${orderNumber}`, "success");
+}
+
+function escHtmlCart(s) {
+  return String(s||"").replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
 
 /* ==========================
    LANGUAGE & CURRENCY
@@ -205,11 +378,33 @@ scrollTopBtn.addEventListener("click", () => window.scrollTo({ top: 0, behavior:
 const modal = document.getElementById("orderModal");
 let currentProduct = { name: "", priceUSD: "", priceSAR: "" };
 
+// ─── استخراج قيمة رقمية من نص السعر ───────────────
+function parsePrice(priceStr) {
+  // يزيل كل شيء ما عدا الأرقام والنقطة
+  return parseFloat(String(priceStr).replace(/[^0-9.]/g, "")) || 0;
+}
+
+function updateModalTotal() {
+  const qty = Math.max(1, parseInt(document.getElementById("orderQty")?.value) || 1);
+  const usdUnit = parsePrice(currentProduct.priceUSD);
+  const sarUnit = parsePrice(currentProduct.priceSAR);
+  const totalUSD = (usdUnit * qty).toFixed(2);
+  const totalSAR = (sarUnit * qty).toFixed(2);
+
+  const infoEl = document.getElementById("modalProductInfo");
+  if (!infoEl) return;
+  infoEl.innerHTML = `
+    <div class="pname">🛍️ ${currentProduct.name}</div>
+    <div class="pprice">
+      <span style="color:var(--primary-light);font-weight:900">$${totalUSD}</span>
+      &nbsp;|&nbsp;
+      <span style="color:var(--text-muted)">${totalSAR} ريال</span>
+      ${qty > 1 ? `<span style="font-size:.75rem;color:var(--text-muted);margin-right:6px">(${qty} × ${currentProduct.priceUSD})</span>` : ""}
+    </div>`;
+}
+
 function openOrder(productName, priceUSD, priceSAR) {
   currentProduct = { name: productName, priceUSD, priceSAR };
-  document.getElementById("modalProductInfo").innerHTML = `
-    <div class="pname">🛍️ ${productName}</div>
-    <div class="pprice">${priceUSD} &nbsp;|&nbsp; ${priceSAR}</div>`;
 
   // إظهار الفورم وإخفاء شاشة التأكيد
   const form    = document.getElementById("orderForm");
@@ -220,6 +415,12 @@ function openOrder(productName, priceUSD, priceSAR) {
   modal.classList.add("active");
   document.body.style.overflow = "hidden";
   document.getElementById("orderForm").reset();
+
+  // اعرض السعر بعد الـ reset عشان الكمية ترجع 1
+  const qtyInp = document.getElementById("orderQty");
+  if (qtyInp) qtyInp.value = 1;
+  updateModalTotal();
+
   setTimeout(() => document.getElementById("buyerContact")?.focus(), 300);
 }
 
@@ -236,7 +437,7 @@ document.addEventListener("keydown", e => {
 /* ==========================
    SUBMIT ORDER → WHATSAPP
    ========================== */
-function submitOrder(e) {
+async function submitOrder(e) {
   e.preventDefault();
 
   const user    = loadStore(KEYS.user, null);
@@ -250,41 +451,83 @@ function submitOrder(e) {
     return;
   }
 
-  // توليد رقم الطلب
-  const seq  = Number(localStorage.getItem(KEYS.orders) || 0) + 1;
-  localStorage.setItem(KEYS.orders, String(seq));
-  const date  = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const orderNumber = `FS-${date}-${String(seq).padStart(4, "0")}`;
+  // الكمية والأسعار
+  const qty     = Math.max(1, parseInt(document.getElementById("orderQty")?.value) || 1);
+  const usdUnit = parsePrice(currentProduct.priceUSD);
+  const sarUnit = parsePrice(currentProduct.priceSAR);
+  const totalUSD = qty > 1 ? `$${(usdUnit * qty).toFixed(2)} (${qty} × ${currentProduct.priceUSD})` : currentProduct.priceUSD;
+  const totalSAR = qty > 1 ? `${(sarUnit * qty).toFixed(2)} ريال (${qty} × ${currentProduct.priceSAR})` : currentProduct.priceSAR;
 
-  const name = user?.name || "زائر";
+  // رقم الطلب
+  let orderNumber;
+  try {
+    const data = await fetch("/api/orders", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(getAuthToken() ? { Authorization: `Bearer ${getAuthToken()}` } : {}),
+      },
+      body: JSON.stringify({
+        product:   qty > 1 ? `${currentProduct.name} × ${qty}` : currentProduct.name,
+        priceUSD:  totalUSD,
+        priceSAR:  totalSAR,
+        payment, contact, notes,
+        userName:  user?.name  || "زائر",
+        userEmail: user?.email || "",
+      }),
+    }).then(r => r.json());
+    if (data.orderNumber) orderNumber = data.orderNumber;
+  } catch { /* نكمل */ }
+
+  if (!orderNumber) {
+    const seq = Number(localStorage.getItem(KEYS.orders) || 0) + 1;
+    localStorage.setItem(KEYS.orders, String(seq));
+    const date = new Date().toISOString().slice(0,10).replace(/-/g,"");
+    orderNumber = `FS-${date}-${String(seq).padStart(4,"0")}`;
+  }
+
+  const name = user?.name  || "زائر";
   const icon = PAYMENT_ICONS[payment] || "💳";
+
+  // حفظ محلي في لوحة الأدمن
+  try {
+    const saved = JSON.parse(localStorage.getItem("fs-admin-orders") || "[]");
+    saved.unshift({
+      orderNumber,
+      product:   qty > 1 ? `${currentProduct.name} × ${qty}` : currentProduct.name,
+      priceUSD:  totalUSD,
+      priceSAR:  totalSAR,
+      payment, contact, notes,
+      userName:  name,
+      userEmail: user?.email || "",
+      status:    "pending",
+      createdAt: new Date().toISOString(),
+    });
+    if (saved.length > 500) saved.pop();
+    localStorage.setItem("fs-admin-orders", JSON.stringify(saved));
+  } catch(err) {}
 
   // رسالة التيليجرام
   const tgMsg = `🛒 *طلب جديد — فارس ستور*
 🧾 *رقم الطلب:* \`${orderNumber}\`
 
 ━━━━━━━━━━━━━━━━
-🛍️ *المنتج:* ${currentProduct.name}
-💵 *السعر:* ${currentProduct.priceUSD} | ${currentProduct.priceSAR}
+🛍️ *المنتج:* ${currentProduct.name}${qty > 1 ? ` × ${qty}` : ""}
+💵 *السعر:* ${totalUSD} | ${totalSAR}
 ━━━━━━━━━━━━━━━━
 👤 *الاسم:* ${name}
-${user?.phone ? `☎️ *الجوال:* ${user.phone}\n` : ""}📱 *التواصل:* ${contact}
+${user?.email ? `📧 *الإيميل:* ${user.email}\n` : ""}📱 *التواصل:* ${contact}
 ${icon} *طريقة الدفع:* ${payment}${notes ? `\n📝 *ملاحظات:* ${notes}` : ""}
 ━━━━━━━━━━━━━━━━
 ⚡ الحالة: *قيد التحضير*`;
 
-  // إرسال إشعار تيليجرام
   sendTelegramNotification(tgMsg);
 
-  // إذا اختار PayPal → افتح رابط الدفع
   if (payment === "PayPal") {
-    const amountUSD = currentProduct.priceUSD.replace(/[^0-9.]/g, "");
-    const paypalURL = `${PAYPAL_ME_URL}/${amountUSD}USD`;
-    window.open(paypalURL, "_blank");
-    // أظهر زر تأكيد الدفع بعد الفتح
+    const amount = (usdUnit * qty).toFixed(2);
+    window.open(`${PAYPAL_ME_URL}/${amount}USD`, "_blank");
     showPaymentPending(orderNumber, "PayPal");
   } else {
-    // باقي طرق الدفع → أظهر التأكيد مباشرة
     showOrderConfirm(orderNumber);
   }
 }
@@ -424,41 +667,39 @@ function showToast(message, type = "info") {
            أو كان الجوال هو رقم الأونر → يحصل على صلاحية أدمن
    ========================== */
 
-// رقم الأونر وكلمة المرور — مخزّنة كـ hash
-const ADMIN_PHONE_NORM = normalizePhone2("0546252805");  // +966546252805
-const ADMIN_PW_HASH    = hashStr2("otaibi511@");
+/* ==========================
+   ACCOUNT — اسم + إيميل للزبون
+   إيميل + كلمة مرور للأدمن
+   ========================== */
 
-function hashStr2(s) {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = Math.imul(31, h) + s.charCodeAt(i) | 0;
-  return h.toString(36);
-}
-function normalizePhone2(v) {
-  const d = String(v || "").replace(/[^\d]/g, "");
-  if (/^05\d{8}$/.test(d))  return `+966${d.slice(1)}`;
-  if (/^9665\d{8}$/.test(d)) return `+${d}`;
-  if (/^5\d{8}$/.test(d))    return `+966${d}`;
-  return d ? `+966${d}` : null;
-}
+// token محفوظ في localStorage
+const TOKEN_KEY = "fs-token";
 
-// OTP مؤقت في الذاكرة (لجلسة التصفح)
-let _pendingOtp   = null;   // { code, phone, name, expiresAt }
-let _pendingIsAdmin = false;
+function getAuthToken()  { return localStorage.getItem(TOKEN_KEY); }
+function setAuthToken(t) { localStorage.setItem(TOKEN_KEY, t); }
+function clearAuth()     { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem("fs-user"); }
+
+function apiCall(method, path, body) {
+  const token = getAuthToken();
+  return fetch(path, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  }).then(r => r.json());
+}
 
 function updateAccountButton() {
-  const user  = loadStore(KEYS.user, null);
+  const user  = loadStore("fs-user", null);
   const label = document.getElementById("accountButtonLabel");
   if (!label) return;
-  if (user) {
-    const icon = user.role === "admin" ? "🛡️" : "👤";
-    label.textContent = `${icon} ${user.name}`;
-  } else {
-    label.textContent = "تسجيل الدخول";
-  }
+  label.textContent = user ? `${user.role === "admin" ? "🛡️" : "👤"} ${user.name}` : "تسجيل الدخول";
 }
 
 function openAccount() {
-  const user    = loadStore(KEYS.user, null);
+  const user    = loadStore("fs-user", null);
   const overlay = document.getElementById("accountOverlay");
   if (!overlay) return;
   overlay.hidden = false;
@@ -470,18 +711,15 @@ function openAccount() {
   const logoutEl  = document.getElementById("accountLogout");
   const iconEl    = document.getElementById("acctIcon");
 
-  // أخفِ كل شيء أولاً
-  if (formEl)    { formEl.hidden = true;    formEl.style.display    = "none"; }
-  if (otpEl)     { otpEl.hidden  = true;    otpEl.style.display     = "none"; }
+  if (formEl)    { formEl.hidden = true;    formEl.style.display = "none"; }
+  if (otpEl)     { otpEl.hidden  = true;    otpEl.style.display  = "none"; }
   if (profileEl) { profileEl.hidden = true; }
   if (logoutEl)  { logoutEl.hidden = true; }
 
   if (user) {
-    // ── مسجّل: أظهر البروفايل فقط ───────────────
     const isAdmin = user.role === "admin";
     if (iconEl) iconEl.textContent = isAdmin ? "🛡️" : "👤";
-    statusEl.textContent = `أهلاً بك، ${user.name} 👋`;
-
+    if (statusEl) statusEl.textContent = `أهلاً بك، ${user.name} 👋`;
     if (profileEl) {
       profileEl.hidden = false;
       const nameEl = document.getElementById("profileName");
@@ -489,135 +727,121 @@ function openAccount() {
       if (nameEl) nameEl.textContent = user.name;
       if (roleEl) {
         if (isAdmin) {
-          roleEl.textContent      = "🛡️ أدمن";
-          roleEl.style.color      = "#a855f7";
+          roleEl.textContent = "🛡️ أدمن";
+          roleEl.style.color = "#a855f7";
           roleEl.style.background = "rgba(124,58,237,.15)";
-          roleEl.style.border     = "1px solid rgba(124,58,237,.35)";
-          // زر لوحة الأدمن
+          roleEl.style.border = "1px solid rgba(124,58,237,.35)";
           let adminBtn = document.getElementById("profileAdminBtn");
           if (!adminBtn) {
             adminBtn = document.createElement("a");
             adminBtn.id = "profileAdminBtn";
             adminBtn.href = "admin.html";
-            adminBtn.style.cssText = `
-              display:inline-flex;align-items:center;gap:6px;
-              padding:9px 20px;border-radius:50px;margin-top:6px;
-              background:linear-gradient(135deg,#7c3aed,#a855f7);
-              color:#fff;font-size:.88rem;font-weight:700;text-decoration:none;`;
+            adminBtn.style.cssText = "display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:50px;margin-top:6px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-size:.88rem;font-weight:700;text-decoration:none;";
             adminBtn.innerHTML = `<i class="fas fa-cog"></i> لوحة الأدمن`;
             profileEl.appendChild(adminBtn);
           }
           adminBtn.hidden = false;
         } else {
-          roleEl.textContent      = "👤 زبون";
-          roleEl.style.color      = "#9d9bc0";
+          roleEl.textContent = "👤 زبون";
+          roleEl.style.color = "#9d9bc0";
           roleEl.style.background = "rgba(255,255,255,.06)";
-          roleEl.style.border     = "1px solid rgba(255,255,255,.12)";
-          const adminBtn = document.getElementById("profileAdminBtn");
-          if (adminBtn) adminBtn.hidden = true;
+          roleEl.style.border = "1px solid rgba(255,255,255,.12)";
+          const btn = document.getElementById("profileAdminBtn");
+          if (btn) btn.hidden = true;
         }
       }
     }
     if (logoutEl) logoutEl.hidden = false;
-
   } else {
-    // ── غير مسجّل: أظهر الخطوة 1 فقط ────────────
     if (iconEl) iconEl.textContent = "👤";
-    statusEl.textContent = "أدخل اسمك ورقم جوالك للمتابعة";
+    if (statusEl) statusEl.textContent = "أدخل اسمك وإيميلك للتسجيل";
     if (formEl) { formEl.hidden = false; formEl.style.display = "flex"; }
   }
 }
 
 function closeAccount() {
-  const overlay = document.getElementById("accountOverlay");
-  if (overlay) overlay.hidden = true;
+  const o = document.getElementById("accountOverlay");
+  if (o) o.hidden = true;
 }
 
-// ── الخطوة 1: إرسال رمز التحقق ──────────────────────
-function requestOtp(e) {
+// ── تسجيل الزبون (اسم + إيميل) ──────────────────────
+function registerUser(e) {
   e && e.preventDefault();
-  const nameVal  = (document.getElementById("accountName")?.value  || "").trim();
-  const phoneVal = (document.getElementById("accountPhone")?.value || "").trim();
+  const name  = (document.getElementById("accountName")?.value  || "").trim();
+  const email = (document.getElementById("accountPhone")?.value || "").trim(); // حقل الإيميل
+  if (!name)  { showToast("⚠️ أدخل اسمك", "error"); return; }
+  if (!email) { showToast("⚠️ أدخل إيميلك", "error"); return; }
 
-  if (!nameVal)  { showToast("⚠️ أدخل اسمك", "error"); return; }
-  if (!phoneVal) { showToast("⚠️ أدخل رقم الجوال", "error"); return; }
-
-  // فحص صلاحية الأدمن
-  const normPhone     = normalizePhone2(phoneVal);
-  const nameIsAdminPw = hashStr2(nameVal) === ADMIN_PW_HASH;
-  const phoneIsAdmin  = normPhone === ADMIN_PHONE_NORM;
-  _pendingIsAdmin     = nameIsAdminPw && phoneIsAdmin;
-
-  // إنشاء OTP
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  _pendingOtp = { code, phone: normPhone, name: nameVal, expiresAt: Date.now() + 5 * 60 * 1000 };
-
-  // في وضع المعاينة: طباعة الكود في الـ console
-  console.log(`%c🔑 رمز التحقق لـ ${nameVal} [${normPhone}]: ${code}`, "color:#a855f7;font-size:16px;font-weight:bold;");
-
-  // الانتقال للخطوة 2 — إخفاء الخطوة 1 أولاً بشكل صريح
-  const formEl = document.getElementById("accountForm");
-  const otpEl  = document.getElementById("otpForm");
-  const statusEl = document.getElementById("accountStatus");
-
-  if (formEl) { formEl.hidden = true; formEl.style.display = "none"; }
-  if (otpEl)  { otpEl.hidden = false; otpEl.style.display = "flex"; }
-  if (statusEl) statusEl.textContent = `✅ الرمز جاهز — افتح Console (F12) للحصول عليه`;
-  document.getElementById("accountOtp")?.focus();
+  apiCall("POST", "/api/register", { name, email })
+    .then(data => {
+      if (!data.ok) { showToast("⚠️ " + data.error, "error"); return; }
+      setAuthToken(data.token);
+      saveStore("fs-user", data.user);
+      updateAccountButton();
+      closeAccount();
+      showToast(`✅ أهلاً ${name}!`, "success");
+    })
+    .catch(() => showToast("⚠️ فشل الاتصال", "error"));
 }
 
-// ── الخطوة 2: تأكيد OTP ──────────────────────────────
-function verifyOtp(e) {
+// ── دخول الأدمن (إيميل + كلمة مرور) ─────────────────
+function adminLogin(e) {
   e && e.preventDefault();
-  const entered = (document.getElementById("accountOtp")?.value || "").trim();
+  const email = (document.getElementById("accountName")?.value  || "").trim();
+  const pass  = (document.getElementById("accountPhone")?.value || "").trim();
+  if (!email || !pass) { showToast("⚠️ أدخل الإيميل وكلمة المرور", "error"); return; }
 
-  if (!_pendingOtp) {
-    showToast("⚠️ انتهت الجلسة — اضغط إعادة إرسال", "error"); return;
-  }
-  if (Date.now() > _pendingOtp.expiresAt) {
-    _pendingOtp = null;
-    showToast("⚠️ انتهت صلاحية الرمز، اطلب رمزاً جديداً", "error"); return;
-  }
-  if (entered !== _pendingOtp.code) {
-    showToast("⚠️ الرمز غير صحيح", "error"); return;
-  }
+  apiCall("POST", "/api/admin/login", { email, password: pass })
+    .then(data => {
+      if (!data.ok) { showToast("⚠️ " + data.error, "error"); return; }
+      setAuthToken(data.token);
+      saveStore("fs-user", data.user);
+      updateAccountButton();
+      closeAccount();
+      showToast("✅ مرحباً بك يا أدمن 🛡️", "success");
+      setTimeout(() => { window.location.href = "admin.html"; }, 1000);
+    })
+    .catch(() => showToast("⚠️ فشل الاتصال", "error"));
+}
 
-  // تسجيل الدخول
-  const role = _pendingIsAdmin ? "admin" : "customer";
-  const user = { name: _pendingOtp.name, phone: _pendingOtp.phone, role };
-  saveStore(KEYS.user, user);
+// تحديد نوع الفورم (زبون أو أدمن) بناءً على الاختيار
+let _isAdminMode = false;
 
-  // حفظ في قائمة المستخدمين محلياً
-  const users = loadStore(KEYS.users, {});
-  const key   = _pendingOtp.phone || _pendingOtp.name;
-  const existing = users[key];
-  if (!existing || existing.role !== "admin" || role === "admin") {
-    users[key] = { name: _pendingOtp.name, phone: _pendingOtp.phone, role, lastSeen: new Date().toISOString() };
+function toggleAccountMode() {
+  _isAdminMode = !_isAdminMode;
+  const nameLabel  = document.querySelector('label[for="accountName"]');
+  const phoneLabel = document.querySelector('label[for="accountPhone"]');
+  const nameInput  = document.getElementById("accountName");
+  const phoneInput = document.getElementById("accountPhone");
+  const btn        = document.querySelector("#accountForm button[type=submit]");
+  const toggle     = document.getElementById("accountModeToggle");
+  const statusEl   = document.getElementById("accountStatus");
+
+  if (_isAdminMode) {
+    if (nameLabel)  nameLabel.textContent  = "إيميل الأدمن";
+    if (phoneLabel) phoneLabel.textContent = "كلمة المرور";
+    if (nameInput)  nameInput.placeholder  = "otaibi511@";
+    if (phoneInput) { phoneInput.placeholder = "••••••••"; phoneInput.type = "password"; }
+    if (btn)        btn.innerHTML = '<i class="fas fa-shield-alt"></i> دخول الأدمن';
+    if (toggle)     toggle.textContent = "← دخول كزبون";
+    if (statusEl)   statusEl.textContent = "دخول لوحة التحكم";
   } else {
-    existing.lastSeen = new Date().toISOString();
-  }
-  saveStore(KEYS.users, users);
-
-  // إرسال للسيرفر المركزي (يعمل على Render)
-  fetch("/api/users/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: _pendingOtp.name, phone: _pendingOtp.phone }),
-  }).catch(() => {});
-
-  _pendingOtp     = null;
-  _pendingIsAdmin = false;
-
-  updateAccountButton();
-  closeAccount();
-  showToast(`✅ أهلاً ${user.name}!${role === "admin" ? " 🛡️ دخلت كأدمن" : ""}`, "success");
-
-  // إذا أدمن → وجّهه للوحة التحكم بعد ثانية
-  if (role === "admin") {
-    setTimeout(() => { window.location.href = "admin.html"; }, 1200);
+    if (nameLabel)  nameLabel.textContent  = "الاسم";
+    if (phoneLabel) phoneLabel.textContent = "الإيميل";
+    if (nameInput)  nameInput.placeholder  = "اكتب اسمك";
+    if (phoneInput) { phoneInput.placeholder = "example@gmail.com"; phoneInput.type = "email"; }
+    if (btn)        btn.innerHTML = '<i class="fas fa-user-check"></i> تسجيل';
+    if (toggle)     toggle.textContent = "← دخول كأدمن";
+    if (statusEl)   statusEl.textContent = "أدخل اسمك وإيميلك للتسجيل";
   }
 }
 
+// إرسال الفورم حسب النوع
+function submitAccountForm(e) {
+  e && e.preventDefault();
+  if (_isAdminMode) adminLogin(e);
+  else registerUser(e);
+}
 /* ==========================
    CHAT — يُخزن في localStorage
    ويظهر في لوحة الأدمن
@@ -733,6 +957,15 @@ function initChat() {
     conv.name   = loadStore(KEYS.user, null)?.name || conv.name || "زائر";
     saveConv(conv);
     renderMsgs();
+
+    // ── إشعار تيليجرام برسالة الدعم ──────────────────
+    const userName = conv.name || "زائر";
+    sendTelegramNotification(
+      `💬 *رسالة دعم جديدة — فارس ستور*\n\n` +
+      `👤 *المرسل:* ${userName}\n` +
+      `📝 *الرسالة:* ${text}\n\n` +
+      `⏰ ${new Date().toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}`
+    );
   });
 
   renderMsgs();
@@ -804,9 +1037,9 @@ function initProductImages() {
     "Dough Fruit":             "images/dough-fruit.png",
     "Fruit Notifier":          "images/fruit-notifier.png",
     "Dark Blade":              "images/dark-blade-blox.png",
-    "World Ender (GPO)":       "https://static.wikia.nocookie.net/grand-piece-online/images/e/e3/WE.png",
-    "CC — Candy Cane (GPO)":   "https://static.wikia.nocookie.net/grand-piece-online/images/b/b9/CandyCane.png",
-    "PCC — Prestige Candy Cane (GPO)": "https://static.wikia.nocookie.net/grand-piece-online/images/3/3d/PCC_New.png",
+    "World Ender (GPO)":              null,
+    "CC — Candy Cane (GPO)":          null,
+    "PCC — Prestige Candy Cane (GPO)":null,
     "Gingerscope":             "images/mm2-gingerscope.png",
     "Traveler's Axe":          "images/mm2/travelers-axe.png",
     "Evergun":                 "images/mm2/evergun.png",
@@ -841,8 +1074,19 @@ function initProductImages() {
 
     // إذا ما في صورة في localMap — GPO يستخدم إيموجي
     const src = localMap[name];
+    if (src === null) {
+      // منتج GPO بدون صورة — حدّد الإيموجي المناسب
+      card.classList.add("emoji-icon");
+      if (icon) {
+        if (name.includes("World Ender")) icon.textContent = "⚔️";
+        else if (name.includes("Candy Cane") && name.includes("Prestige")) icon.textContent = "🍬";
+        else if (name.includes("Candy Cane")) icon.textContent = "🍭";
+        else icon.textContent = "🌊";
+      }
+      return;
+    }
     if (!src && game === "Grand Piece Online") {
-      card.classList.add("emoji-icon"); // أظهر الإيموجي
+      card.classList.add("emoji-icon");
       return;
     }
 
@@ -922,16 +1166,32 @@ function loadReviews() {
     .then(r => r.json())
     .then(data => {
       const container = document.getElementById("reviewsList");
+      const emptyEl   = document.querySelector(".reviews-empty");
+      const subtitleEl = document.querySelector(".reviews-header .section-subtitle");
       if (!container) return;
       const list = data.reviews || [];
-      if (!list.length) { container.innerHTML = ""; return; }
+
+      if (!list.length) {
+        container.innerHTML = "";
+        if (emptyEl) emptyEl.hidden = false;
+        return;
+      }
+
+      // إخفاء placeholder "لا توجد تقييمات"
+      if (emptyEl) emptyEl.hidden = true;
+      // حدّث subtitle ليعكس عدد التقييمات
+      if (subtitleEl) subtitleEl.textContent = `${list.length} تقييم حقيقي من عملائنا`;
+
       container.innerHTML = list.slice(0, 10).map(r => `
-        <div class="review-card">
-          <div class="review-header">
-            <strong>${escHtml(r.name)}</strong>
-            <span class="review-stars">${"⭐".repeat(Number(r.rating) || 5)}</span>
+        <div class="review-card" style="
+          background:var(--bg3);border:1px solid rgba(124,58,237,.2);
+          border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:8px;
+        ">
+          <div class="review-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <strong style="font-size:.95rem;">${escHtml(r.name)}</strong>
+            <span style="font-size:.85rem;letter-spacing:.05em">${"⭐".repeat(Math.min(5, Number(r.rating) || 5))}</span>
           </div>
-          <p class="review-text">${escHtml(r.text)}</p>
+          <p class="review-text" style="font-size:.88rem;color:var(--text-muted);line-height:1.55;margin:0;">${escHtml(r.text)}</p>
         </div>
       `).join("");
     })
@@ -949,6 +1209,18 @@ document.addEventListener("DOMContentLoaded", () => {
   initReviews();
   initChat();
   updateAccountButton();
+  try {
+    const raw = JSON.parse(localStorage.getItem(KEYS.cart));
+    if (!Array.isArray(raw)) {
+      localStorage.removeItem(KEYS.cart);
+    } else {
+      const clean = raw.filter(i => i && typeof i === "object" && i.name && Number(i.qty) > 0 && Number(i.qty) <= 99);
+      // لو في فرق أو البيانات كبيرة جداً → نظّف
+      localStorage.setItem(KEYS.cart, JSON.stringify(clean));
+    }
+  } catch(e) { localStorage.removeItem(KEYS.cart); }
+  saveCart(getCart());
+  updateCartBadge();
 
   // تهيئة اللغة والعملة من الذاكرة
   const savedCurrency = localStorage.getItem("fs-currency") || "both";
@@ -963,26 +1235,17 @@ document.addEventListener("DOMContentLoaded", () => {
     ?.addEventListener("click", closeAccount);
   document.getElementById("accountOverlay")
     ?.addEventListener("click", e => { if (e.target.id === "accountOverlay") closeAccount(); });
-  // الخطوة 1
+  // فورم موحّد (زبون أو أدمن)
   document.getElementById("accountForm")
-    ?.addEventListener("submit", requestOtp);
-  // الخطوة 2
-  document.getElementById("otpForm")
-    ?.addEventListener("submit", verifyOtp);
-  // إعادة إرسال
-  document.getElementById("resendOtp")
-    ?.addEventListener("click", () => {
-      const f = document.getElementById("accountForm");
-      const o = document.getElementById("otpForm");
-      if (f) { f.hidden = false; f.style.display = "flex"; }
-      if (o) { o.hidden = true;  o.style.display = "none"; }
-      document.getElementById("accountStatus").textContent = "أدخل اسمك ورقم جوالك للمتابعة";
-      _pendingOtp = null;
-    });
+    ?.addEventListener("submit", submitAccountForm);
+  // زر تبديل الوضع
+  const modeToggle = document.getElementById("accountModeToggle");
+  if (modeToggle) modeToggle.addEventListener("click", toggleAccountMode);
   // تسجيل الخروج
   document.getElementById("accountLogout")
     ?.addEventListener("click", () => {
-      localStorage.removeItem(KEYS.user);
+      clearAuth();
+      _isAdminMode = false;
       updateAccountButton();
       closeAccount();
       showToast("✅ تم تسجيل الخروج");
