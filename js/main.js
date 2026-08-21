@@ -726,14 +726,18 @@ function openAccount() {
   if (logoutEl)  { logoutEl.hidden = true; }
 
   if (user) {
-    const isAdmin = cleanUser.role === "admin";
+    const isAdmin = user.role === "admin";
     if (iconEl) iconEl.textContent = isAdmin ? "🛡️" : "👤";
     if (statusEl) statusEl.textContent = `أهلاً بك، ${user.name} 👋`;
     if (profileEl) {
       profileEl.hidden = false;
-      const nameEl = document.getElementById("profileName");
-      const roleEl = document.getElementById("profileRole");
+      const nameEl  = document.getElementById("profileName");
+      const emailEl = document.getElementById("profileEmail");
+      const roleEl  = document.getElementById("profileRole");
+      
       if (nameEl) nameEl.textContent = user.name;
+      if (emailEl) emailEl.textContent = user.email || "";
+      
       if (roleEl) {
         if (isAdmin) {
           // الأدمن — لا نعرض أي مؤشر ظاهر، فقط نوجهه للوحة التحكم مباشرة
