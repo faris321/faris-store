@@ -820,8 +820,8 @@ function toggleAccountMode() {
   if (_isAdminMode) {
     if (nameLabel)  nameLabel.textContent  = "إيميل الأدمن";
     if (phoneLabel) phoneLabel.textContent = "كلمة المرور";
-    if (nameInput)  nameInput.placeholder  = "otaibi511@";
-    if (phoneInput) { phoneInput.placeholder = "••••••••"; phoneInput.type = "password"; }
+    if (nameInput)  nameInput.placeholder  = "الإيميل";
+    if (phoneInput) { phoneInput.placeholder = "كلمة المرور"; phoneInput.type = "password"; }
     if (btn)        btn.innerHTML = '<i class="fas fa-shield-alt"></i> دخول الأدمن';
     if (toggle)     toggle.textContent = "← دخول كزبون";
     if (statusEl)   statusEl.textContent = "دخول لوحة التحكم";
