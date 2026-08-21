@@ -43,14 +43,30 @@ const ADMIN_HASH  = hashStr("otaibi511@");
 // ── البيانات في الذاكرة ──────────────────────────────
 const users         = new Map(); // email → { name, email, role, createdAt }
 const sessions      = new Map(); // token → { email, role, expiresAt }
-const orders        = [];        // قائمة الطلبات
-const conversations = new Map(); // convId → { name, email, messages, unread, at }
 
-// الآراء — محملة من الملف عند البدء
+// الطلبات — محملة من الملف
+const _ordersData = readDataFile("orders.json", { seq: 0, list: [] });
+let orderSeq = _ordersData.seq || 0;
+const orders = _ordersData.list || [];
+
+// المحادثات — محملة من الملف
+const _convsData = readDataFile("conversations.json", {});
+const conversations = new Map(Object.entries(_convsData));
+
+// الآراء — محملة من الملف
 const reviews = readDataFile("reviews.json", []);
 
-let orderSeq = 0;
 const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
+
+// ── حفظ الطلبات والمحادثات ────────────────────────
+function saveOrders() {
+  writeDataFile("orders.json", { seq: orderSeq, list: orders });
+}
+function saveConversations() {
+  const obj = {};
+  for (const [k, v] of conversations) obj[k] = v;
+  writeDataFile("conversations.json", obj);
+}
 
 // إضافة حساب الأدمن مباشرة
 users.set(ADMIN_EMAIL, {
@@ -149,6 +165,7 @@ async function handleApi(req, res, pathname) {
       createdAt: new Date().toISOString(),
     };
     orders.push(order);
+    saveOrders();
     return json(res, 200, { ok: true, orderNumber });
   }
 
@@ -167,6 +184,7 @@ async function handleApi(req, res, pathname) {
     const order = orders.find(o => o.orderNumber === b.orderNumber);
     if (!order) return json(res, 404, { error: "الطلب غير موجود" });
     order.status = String(b.status || "pending");
+    saveOrders();
     return json(res, 200, { ok: true });
   }
 
@@ -182,8 +200,20 @@ async function handleApi(req, res, pathname) {
   // ── قائمة المستخدمين (بدون auth للأدمن المحلي): GET /api/users/list ──
   if (pathname === "/api/users/list" && req.method === "GET") {
     const list = [];
-    for (const [,u] of users) list.push({ name: u.name, phone: u.email, role: u.role, lastSeen: u.createdAt });
+    for (const [,u] of users) list.push({ name: u.name, phone: u.email, email: u.email, role: u.role, lastSeen: u.createdAt });
     return json(res, 200, { users: list });
+  }
+
+  // ── ترقية/تخفيض المستخدم: POST /api/users/role { email, role } ──
+  if (pathname === "/api/users/role" && req.method === "POST") {
+    const s = getSession(req);
+    if (!s || s.role !== "admin") return json(res, 403, { error: "غير مصرح" });
+    let b; try { b = await readJson(req); } catch(e) { return json(res,400,{error:e.message}); }
+    const email = String(b.email || "").trim().toLowerCase();
+    const role  = String(b.role  || "customer");
+    if (!users.has(email)) return json(res, 404, { error: "المستخدم غير موجود" });
+    users.get(email).role = role;
+    return json(res, 200, { ok: true });
   }
 
   // ── المحادثات ──
@@ -201,6 +231,7 @@ async function handleApi(req, res, pathname) {
     conv.unread = (conv.unread||0) + 1;
     conv.at = Date.now();
     conversations.set(convId, conv);
+    saveConversations();
     return json(res, 200, { ok: true });
   }
 
@@ -213,7 +244,41 @@ async function handleApi(req, res, pathname) {
     conv.messages.push({ id: crypto.randomUUID(), from:"support", text: String(b.text||"").slice(0,500), at: new Date().toISOString() });
     conv.unread = 0;
     conversations.set(b.convId, conv);
+    saveConversations();
     return json(res, 200, { ok: true });
+  }
+
+  if (pathname === "/api/chat/delete" && req.method === "POST") {
+    const s = getSession(req);
+    if (!s || s.role !== "admin") return json(res, 403, { error: "غير مصرح" });
+    let b; try { b = await readJson(req); } catch(e) { return json(res,400,{error:e.message}); }
+    conversations.delete(String(b.convId||""));
+    saveConversations();
+    return json(res, 200, { ok: true });
+  }
+
+  if (pathname === "/api/chat/mute" && req.method === "POST") {
+    const s = getSession(req);
+    if (!s || s.role !== "admin") return json(res, 403, { error: "غير مصرح" });
+    let b; try { b = await readJson(req); } catch(e) { return json(res,400,{error:e.message}); }
+    const conv = conversations.get(String(b.convId||""));
+    if (!conv) return json(res, 404, { error: "المحادثة غير موجودة" });
+    conv.mutedBuyer = b.mute !== false;
+    conversations.set(b.convId, conv);
+    saveConversations();
+    return json(res, 200, { ok: true, mutedBuyer: conv.mutedBuyer });
+  }
+
+  if (pathname === "/api/chat/hide" && req.method === "POST") {
+    const s = getSession(req);
+    if (!s || s.role !== "admin") return json(res, 403, { error: "غير مصرح" });
+    let b; try { b = await readJson(req); } catch(e) { return json(res,400,{error:e.message}); }
+    const conv = conversations.get(String(b.convId||""));
+    if (!conv) return json(res, 404, { error: "المحادثة غير موجودة" });
+    conv.hiddenFromBuyer = b.hide !== false;
+    conversations.set(b.convId, conv);
+    saveConversations();
+    return json(res, 200, { ok: true, hiddenFromBuyer: conv.hiddenFromBuyer });
   }
 
   if (pathname === "/api/chat/messages" && req.method === "GET") {
@@ -221,12 +286,15 @@ async function handleApi(req, res, pathname) {
     const convId = url.searchParams.get("convId");
     const s = getSession(req);
     const conv = conversations.get(convId);
-    if (!conv) return json(res, 200, { messages: [] });
-    if (s?.role !== "admin" && conv.email && conv.email !== s?.email) {
-      return json(res, 200, { messages: conv.messages });
-    }
+    if (!conv) return json(res, 200, { messages: [], name: "" });
     conv.unread = 0;
-    return json(res, 200, { messages: conv.messages, name: conv.name });
+    saveConversations();
+    return json(res, 200, {
+      messages: conv.messages,
+      name: conv.name,
+      hiddenFromBuyer: conv.hiddenFromBuyer || false,
+      mutedBuyer: conv.mutedBuyer || false,
+    });
   }
 
   if (pathname === "/api/chat/list" && req.method === "GET") {

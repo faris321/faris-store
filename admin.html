@@ -245,7 +245,7 @@
   <div class="page" id="page-users">
     <div class="panel">
       <div class="ph"><h3>👥 المستخدمون</h3><button class="btn btn-primary btn-sm" onclick="openAddUser()"><i class="fas fa-user-shield"></i> إضافة</button></div>
-      <table><thead><tr><th>الاسم</th><th>الجوال</th><th>الرتبة</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="usersTable"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">لا يوجد مستخدمون</td></tr></tbody></table>
+      <table><thead><tr><th>الاسم</th><th>الإيميل</th><th>الرتبة</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="usersTable"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">لا يوجد مستخدمون</td></tr></tbody></table>
     </div>
   </div>
 
@@ -496,13 +496,23 @@ function renderChatWindow(conv){
   var win=document.getElementById("chatWin");
   if(!win)return;
   var cid=conv.id||conv.convId||activeConvId;
+  var isHidden=conv.hiddenFromBuyer||false,isMuted=conv.mutedBuyer||false;
   var header='<div class="cw-header">'
     +'<div class="conv-av">'+(conv.name||"ز").charAt(0)+'</div>'
     +'<div style="flex:1"><div class="cw-name">'+esc(conv.name||"زائر")+'</div>'
     +'<div class="cw-sub">محادثة دعم</div></div>'
     +'<div class="cw-actions">'
+    +'<button class="btn btn-sm '+(isHidden?"btn-success":"btn-ghost")+'" onclick="toggleHide(\''+esc(cid)+'\')">'
+      +'<i class="fas fa-'+(isHidden?"eye":"eye-slash")+'"></i> '+(isHidden?"إظهار":"إخفاء")
+    +'</button>'
+    +'<button class="btn btn-sm '+(isMuted?"btn-success":"btn-warn")+'" onclick="toggleMute(\''+esc(cid)+'\')">'
+      +'<i class="fas fa-'+(isMuted?"volume-up":"volume-mute")+'"></i> '+(isMuted?"رفع المنع":"منع")
+    +'</button>'
     +'<button class="btn btn-danger btn-sm" onclick="deleteConv(\''+esc(cid)+'\')"><i class="fas fa-trash"></i></button>'
     +'</div></div>';
+  var banners="";
+  if(isHidden)banners+='<div class="hidden-banner"><i class="fas fa-eye-slash"></i> مخفية عن الزبون</div>';
+  if(isMuted) banners+='<div class="muted-banner"><i class="fas fa-volume-mute"></i> الزبون ممنوع من الإرسال</div>';
   var msgs=(conv.messages||[]).filter(function(m){return m.text!=="__linked__";});
   var msgsHtml=msgs.length===0
     ?'<div class="cw-empty"><i class="fas fa-comment-slash"></i><span>لا توجد رسائل</span></div>'
@@ -517,7 +527,7 @@ function renderChatWindow(conv){
     +'<input id="replyInp" placeholder="اكتب ردك..." maxlength="500" required autocomplete="off" />'
     +'<button class="send-btn" type="submit"><i class="fas fa-paper-plane"></i></button>'
     +'</form>';
-  win.innerHTML=header+'<div class="cw-msgs" id="cwMsgs">'+msgsHtml+'</div>'+replyForm;
+  win.innerHTML=header+banners+'<div class="cw-msgs" id="cwMsgs">'+msgsHtml+'</div>'+replyForm;
   var m=document.getElementById("cwMsgs");
   if(m)m.scrollTop=m.scrollHeight;
 }
@@ -558,17 +568,43 @@ function sendReply(e,convId){
   });
 }
 
+function toggleHide(convId){
+  var token=localStorage.getItem("fs-token");
+  fetch("/api/chat/messages?convId="+encodeURIComponent(convId),{headers:token?{Authorization:"Bearer "+token}:{}})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var curHide=!!(data.hiddenFromBuyer);
+      return fetch("/api/chat/hide",{method:"POST",headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},body:JSON.stringify({convId:convId,hide:!curHide})});
+    }).then(function(r){return r.json();})
+    .then(function(d){showToast(d.hiddenFromBuyer?"🚫 مخفية عن الزبون":"👁️ ظاهرة للزبون");openConv(convId);})
+    .catch(function(){showToast("⚠️ فشل","error");});
+}
+function toggleMute(convId){
+  var token=localStorage.getItem("fs-token");
+  fetch("/api/chat/messages?convId="+encodeURIComponent(convId),{headers:token?{Authorization:"Bearer "+token}:{}})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var curMute=!!(data.mutedBuyer);
+      return fetch("/api/chat/mute",{method:"POST",headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},body:JSON.stringify({convId:convId,mute:!curMute})});
+    }).then(function(r){return r.json();})
+    .then(function(d){showToast(d.mutedBuyer?"🔇 تم منع الزبون":"🔊 تم رفع المنع",d.mutedBuyer?"warn":"success");openConv(convId);})
+    .catch(function(){showToast("⚠️ فشل","error");});
+}
 function deleteConv(convId){
   if(!confirm("هل تريد حذف هذه المحادثة نهائياً؟"))return;
-  // حذف من localStorage كـ fallback
-  var convs=load(KEYS.convs,{});
-  delete convs[convId];
-  save(KEYS.convs,convs);
-  activeConvId=null;
-  document.getElementById("chatWin").innerHTML='<div class="no-select"><i class="fas fa-comments"></i><span>اختر محادثة</span></div>';
-  renderConvList();
-  loadOverview();
-  showToast("🗑️ تم حذف المحادثة");
+  var token=localStorage.getItem("fs-token");
+  fetch("/api/chat/delete",{method:"POST",headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},body:JSON.stringify({convId:convId})})
+    .then(function(){
+      activeConvId=null;
+      document.getElementById("chatWin").innerHTML='<div class="no-select"><i class="fas fa-comments"></i><span>اختر محادثة</span></div>';
+      renderConvList();loadOverview();showToast("🗑️ تم حذف المحادثة");
+    }).catch(function(){
+      // fallback localStorage
+      var convs=load(KEYS.convs,{});delete convs[convId];save(KEYS.convs,convs);
+      activeConvId=null;
+      document.getElementById("chatWin").innerHTML='<div class="no-select"><i class="fas fa-comments"></i><span>اختر محادثة</span></div>';
+      renderConvList();loadOverview();showToast("🗑️ تم حذف المحادثة");
+    });
 }
 function renderUsers(){
   var tbody=document.getElementById("usersTable");
@@ -596,18 +632,104 @@ function renderUsers(){
 function _renderUsersTable(list){
   var tbody=document.getElementById("usersTable");
   document.getElementById("stUsers").textContent=list.length;
-  if(!list.length){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">لا يوجد مستخدمون</td></tr>';return;}
+  if(!list.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">لا يوجد مستخدمون</td></tr>';return;}
   list.sort(function(a,b){return a.role==="admin"&&b.role!=="admin"?-1:b.role==="admin"&&a.role!=="admin"?1:0;});
   tbody.innerHTML=list.map(function(u){
-    var isAdmin=u.role==="admin",key=u.phone||u.name;
-    return'<tr><td><strong>'+esc(u.name||"—")+'</strong></td>'+
-      '<td style="direction:ltr;color:var(--muted);font-size:.82rem">'+esc(u.phone||"—")+'</td>'+
-      '<td><span class="rb rb-'+(u.role||"customer")+'">'+(isAdmin?"🛡️ أدمن":"👤 زبون")+'</span></td>'+
-      '<td style="color:var(--muted);font-size:.76rem">'+fmtTime(u.lastSeen)+'</td>'+
-      '<td><button class="btn btn-sm '+(isAdmin?"btn-danger":"btn-success")+'" onclick="toggleRole(\''+esc(key)+'\')">'+(isAdmin?"⬇️ إزالة":"⬆️ ترقية")+'</button></td></tr>';
+    var isAdmin=u.role==="admin";
+    var email=u.email||u.phone||"";
+    var udata=encodeURIComponent(JSON.stringify({name:u.name,email:email,role:u.role,lastSeen:u.lastSeen}));
+    return'<tr>'
+      +'<td><strong>'+esc(u.name||"—")+'</strong></td>'
+      +'<td style="direction:ltr;color:var(--muted);font-size:.82rem">'+esc(email)+'</td>'
+      +'<td><span class="rb rb-'+(u.role||"customer")+'">'+(isAdmin?"🛡️ أدمن":"👤 زبون")+'</span></td>'
+      +'<td style="color:var(--muted);font-size:.76rem">'+fmtTime(u.lastSeen)+'</td>'
+      +'<td style="display:flex;gap:6px;flex-wrap:wrap;">'
+        +'<button class="btn btn-ghost btn-sm" onclick="showUserInfo(\''+udata+'\')"><i class="fas fa-user"></i> معلومات</button>'
+        +'<button class="btn btn-sm '+(isAdmin?"btn-danger":"btn-success")+'" onclick="toggleRole(\''+esc(email)+'\')">'+(isAdmin?"⬇️ إزالة":"⬆️ ترقية")+'</button>'
+      +'</td>'
+    +'</tr>';
   }).join("");
 }
-function toggleRole(key){var users=load(KEYS.users,{});if(!users[key])return;users[key].role=users[key].role==="admin"?"customer":"admin";save(KEYS.users,users);showToast("✅ تم تغيير الرتبة");renderUsers();loadOverview();}
+
+function showUserInfo(udata){
+  try{
+    var u=JSON.parse(decodeURIComponent(udata));
+    // ابحث عن طلبات هذا المستخدم
+    var token=localStorage.getItem("fs-token");
+    fetch("/api/orders",{headers:token?{Authorization:"Bearer "+token}:{}})
+      .then(function(r){return r.json();})
+      .then(function(data){
+        var orders=(data.orders||[]).filter(function(o){return o.userEmail===u.email||o.userName===u.name;});
+        var ordersHtml=orders.length===0?'<p style="color:var(--muted);font-size:.85rem">لا توجد طلبات</p>'
+          :orders.slice(0,5).map(function(o){
+            return'<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:.82rem;">'
+              +'<strong style="color:var(--accent)">'+esc(o.orderNumber)+'</strong> — '+esc(o.product)+'<br>'
+              +'<span style="color:var(--muted)">'+esc(o.priceUSD)+' | '+fmtTime(o.createdAt)+'</span>'
+            +'</div>';
+          }).join("");
+        var box=document.getElementById("userInfoBox");
+        if(!box){
+          box=document.createElement("div");
+          box.id="userInfoBox";
+          box.style.cssText="position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px;";
+          box.onclick=function(e){if(e.target===box)box.remove();};
+          document.body.appendChild(box);
+        }
+        box.innerHTML='<div style="background:var(--bg3);border:1px solid rgba(124,58,237,.3);border-radius:20px;padding:28px;width:min(460px,96vw);max-height:90vh;overflow-y:auto;box-shadow:0 32px 80px rgba(0,0,0,.6);">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">'
+            +'<h3 style="font-size:1.1rem;font-weight:900;">👤 معلومات العميل</h3>'
+            +'<button onclick="document.getElementById(\'userInfoBox\').remove()" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;">✕</button>'
+          +'</div>'
+          +'<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px;">'
+            +'<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 16px;">'
+              +'<div style="font-size:.75rem;color:var(--muted);margin-bottom:2px;">الاسم</div>'
+              +'<div style="font-weight:800;">'+esc(u.name||"—")+'</div>'
+            +'</div>'
+            +'<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 16px;">'
+              +'<div style="font-size:.75rem;color:var(--muted);margin-bottom:2px;">الإيميل / التواصل</div>'
+              +'<div style="font-weight:700;direction:ltr;">'+esc(u.email||"—")+'</div>'
+            +'</div>'
+            +'<div style="display:flex;gap:8px;">'
+              +'<div style="flex:1;background:rgba(255,255,255,.04);border-radius:10px;padding:12px 16px;">'
+                +'<div style="font-size:.75rem;color:var(--muted);margin-bottom:2px;">الرتبة</div>'
+                +'<div>'+(u.role==="admin"?'<span class="rb rb-admin">🛡️ أدمن</span>':'<span class="rb rb-customer">👤 زبون</span>')+'</div>'
+              +'</div>'
+              +'<div style="flex:1;background:rgba(255,255,255,.04);border-radius:10px;padding:12px 16px;">'
+                +'<div style="font-size:.75rem;color:var(--muted);margin-bottom:2px;">آخر نشاط</div>'
+                +'<div style="font-size:.82rem;">'+fmtTime(u.lastSeen)+'</div>'
+              +'</div>'
+            +'</div>'
+          +'</div>'
+          +'<div style="font-size:.88rem;font-weight:800;margin-bottom:10px;">📦 الطلبات ('+orders.length+')</div>'
+          +ordersHtml
+        +'</div>';
+        box.style.display="flex";
+      }).catch(function(){showToast("⚠️ فشل تحميل البيانات","error");});
+  }catch(e){showToast("⚠️ خطأ","error");}
+}
+
+function toggleRole(email){
+  var token=localStorage.getItem("fs-token");
+  // نحدد الرتبة الحالية من الجدول
+  var curBtn=event.target;
+  var isCurrentlyAdmin=curBtn.textContent.includes("إزالة");
+  var newRole=isCurrentlyAdmin?"customer":"admin";
+  fetch("/api/users/role",{
+    method:"POST",
+    headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},
+    body:JSON.stringify({email:email,role:newRole})
+  }).then(function(r){return r.json();})
+  .then(function(d){
+    if(d.ok===false){showToast("⚠️ "+(d.error||"فشل"),"error");return;}
+    showToast("✅ تم تغيير الرتبة");renderUsers();loadOverview();
+  }).catch(function(){
+    // fallback localStorage
+    var users=load(KEYS.users,{});
+    var key=Object.keys(users).find(function(k){return users[k].phone===email||users[k].email===email||k===email;});
+    if(key){users[key].role=newRole;save(KEYS.users,users);}
+    showToast("✅ تم تغيير الرتبة");renderUsers();loadOverview();
+  });
+}
 function openAddUser(){document.getElementById("addUserModal").classList.add("open");}
 function closeModal(id){document.getElementById(id).classList.remove("open");}
 document.getElementById("addUserModal").addEventListener("click",function(e){if(e.target===this)closeModal("addUserModal");});
