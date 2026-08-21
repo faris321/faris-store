@@ -896,7 +896,12 @@ function initChat() {
     fetch(`/api/chat/messages?convId=${encodeURIComponent(convId)}`)
       .then(r => r.json())
       .then(data => {
-        const msgs = (data.messages || []).filter(m => m.text !== "__linked__");
+        const serverMsgs = (data.messages || []).filter(m => m.text !== "__linked__");
+        // دمج مع الرسائل المحلية عشان ما تختفي قبل ما يحفظها السيرفر
+        const localConv  = loadStore(KEYS.convs, {})[convId];
+        const localMsgs  = ((localConv?.messages) || []).filter(m => m.text !== "__linked__");
+        // استخدم السيرفر لو فيه رسائل، وإلا استخدم المحلي
+        const msgs = serverMsgs.length > 0 ? serverMsgs : localMsgs;
         renderMsgs(msgs);
       })
       .catch(() => {
@@ -927,6 +932,20 @@ function initChat() {
     input.value = "";
 
     const name = userName();
+
+    // أضف الرسالة محلياً فوراً عشان تظهر بدون انتظار السيرفر
+    const convs = loadStore(KEYS.convs, {});
+    const localConv = convs[convId] || { id: convId, name, messages: [], unread: 0, at: Date.now() };
+    localConv.messages = localConv.messages || [];
+    const newMsg = { id: Date.now().toString(36), from: "buyer", text, at: new Date().toISOString() };
+    localConv.messages.push(newMsg);
+    localConv.messages = localConv.messages.slice(-200);
+    localConv.unread = (localConv.unread || 0) + 1;
+    localConv.at = Date.now();
+    localConv.name = name;
+    convs[convId] = localConv;
+    saveStore(KEYS.convs, convs);
+    fetchMsgs(); // أظهر الرسالة فوراً
 
     // أرسل للسيرفر
     fetch("/api/chat/send", {
