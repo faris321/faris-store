@@ -41,8 +41,11 @@ const ADMIN_EMAIL = "otaibi511@";
 const ADMIN_HASH  = hashStr("otaibi511@");
 
 // ── البيانات في الذاكرة ──────────────────────────────
-const users         = new Map(); // email → { name, email, role, createdAt }
-const sessions      = new Map(); // token → { email, role, expiresAt }
+const sessions = new Map(); // token → { email, role, expiresAt }
+
+// المستخدمون — محملة من الملف
+const _usersData = readDataFile("users.json", {});
+const users = new Map(Object.entries(_usersData));
 
 // الطلبات — محملة من الملف
 const _ordersData = readDataFile("orders.json", { seq: 0, list: [] });
@@ -58,7 +61,12 @@ const reviews = readDataFile("reviews.json", []);
 
 const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
 
-// ── حفظ الطلبات والمحادثات ────────────────────────
+// ── حفظ البيانات في ملفات ─────────────────────────
+function saveUsers() {
+  const obj = {};
+  for (const [k, v] of users) obj[k] = v;
+  writeDataFile("users.json", obj);
+}
 function saveOrders() {
   writeDataFile("orders.json", { seq: orderSeq, list: orders });
 }
@@ -68,13 +76,14 @@ function saveConversations() {
   writeDataFile("conversations.json", obj);
 }
 
-// إضافة حساب الأدمن مباشرة
-users.set(ADMIN_EMAIL, {
-  name: "فارس",
-  email: ADMIN_EMAIL,
-  role: "admin",
-  createdAt: new Date().toISOString(),
-});
+// تأكد أن حساب الأدمن موجود دائماً
+if (!users.has(ADMIN_EMAIL)) {
+  users.set(ADMIN_EMAIL, {
+    name: "فارس", email: ADMIN_EMAIL, role: "admin",
+    createdAt: new Date().toISOString(),
+  });
+  saveUsers();
+}
 
 // ── مساعدات ────────────────────────────────────────
 function readJson(req) {
@@ -119,6 +128,7 @@ async function handleApi(req, res, pathname) {
     } else {
       users.get(email).name = name;
     }
+    saveUsers();
     const token = generateToken();
     sessions.set(token, { email, role: users.get(email).role, expiresAt: Date.now() + SESSION_TTL });
     return json(res, 200, { ok: true, token, user: { name, email, role: users.get(email).role } });
@@ -213,6 +223,7 @@ async function handleApi(req, res, pathname) {
     const role  = String(b.role  || "customer");
     if (!users.has(email)) return json(res, 404, { error: "المستخدم غير موجود" });
     users.get(email).role = role;
+    saveUsers();
     return json(res, 200, { ok: true });
   }
 

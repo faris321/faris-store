@@ -431,6 +431,7 @@ function openOrder(productName, priceUSD, priceSAR) {
 }
 
 function closeOrder() {
+  if (!modal) return;
   modal.classList.remove("active");
   document.body.style.overflow = "";
 }
