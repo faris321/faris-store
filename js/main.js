@@ -701,10 +701,6 @@ function apiCall(method, path, body) {
 }
 
 function updateAccountButton() {
-  // لو في user بدون token — امسحه (جلسة قديمة)
-  const token = getAuthToken();
-  if (loadStore("fs-user", null) && !token) clearAuth();
-
   const user  = loadStore("fs-user", null);
   const label = document.getElementById("accountButtonLabel");
   if (!label) return;
@@ -712,15 +708,7 @@ function updateAccountButton() {
 }
 
 function openAccount() {
-  // لو في token قديم منتهي أو user بدون token — امسحه
-  const user    = loadStore("fs-user", null);
-  const token   = getAuthToken();
-  // لو في user بدون token — امسحه (جلسة قديمة)
-  if (user && !token) {
-    clearAuth();
-  }
-
-  const cleanUser = loadStore("fs-user", null);
+  const user = loadStore("fs-user", null);
   const overlay = document.getElementById("accountOverlay");
   if (!overlay) return;
   overlay.hidden = false;
@@ -737,7 +725,7 @@ function openAccount() {
   if (profileEl) { profileEl.hidden = true; }
   if (logoutEl)  { logoutEl.hidden = true; }
 
-  if (cleanUser) {
+  if (user) {
     const isAdmin = cleanUser.role === "admin";
     if (iconEl) iconEl.textContent = isAdmin ? "🛡️" : "👤";
     if (statusEl) statusEl.textContent = `أهلاً بك، ${user.name} 👋`;
