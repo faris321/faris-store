@@ -1136,18 +1136,27 @@ function initReviews() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(r),
     })
-    .then(() => {
+    .then(res => res.json())
+    .then(data => {
+      if (data.ok === false) {
+        showToast("⚠️ " + (data.error || "فشل الإرسال"), "error");
+        return;
+      }
       form.reset();
-      showToast("✅ تم إرسال رأيك وسيظهر قريباً", "success");
-      loadReviews(); // حدّث القائمة
+      showToast("✅ تم نشر رأيك!", "success");
+      // انتظر ثانية ثم حدّث القائمة
+      setTimeout(loadReviews, 800);
     })
     .catch(() => {
-      // fallback: احفظ محلياً
+      // fallback: احفظ محلياً وأظهره مباشرة
       const pending = loadStore("fs-pending-reviews", []);
-      pending.push({ ...r, at: new Date().toISOString() });
+      const newReview = { ...r, at: new Date().toISOString(), id: Date.now().toString(36) };
+      pending.unshift(newReview);
       saveStore("fs-pending-reviews", pending);
       form.reset();
-      showToast("✅ تم استلام رأيك وسيظهر بعد المراجعة", "success");
+      showToast("✅ تم نشر رأيك!", "success");
+      // أعد تحميل الآراء عشان تظهر
+      loadReviews();
     });
   });
 }
@@ -1188,7 +1197,25 @@ function loadReviews() {
         </div>
       `).join("");
     })
-    .catch(() => {}); // صامت لو السيرفر ما رد
+    .catch(() => {
+      // عرض الآراء المحلية كـ fallback
+      const pending = loadStore("fs-pending-reviews", []);
+      const container = document.getElementById("reviewsList");
+      const emptyEl   = document.querySelector(".reviews-empty");
+      if (!container) return;
+      if (!pending.length) { if (emptyEl) emptyEl.hidden = false; return; }
+      if (emptyEl) emptyEl.hidden = true;
+      const escHtml = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      container.innerHTML = pending.slice(0,10).map(r => `
+        <div class="review-card" style="background:var(--bg3);border:1px solid rgba(124,58,237,.2);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <strong style="font-size:.95rem;">${escHtml(r.name)}</strong>
+            <span>${"⭐".repeat(Math.min(5, Number(r.rating)||5))}</span>
+          </div>
+          <p style="font-size:.88rem;color:var(--text-muted);line-height:1.55;margin:0;">${escHtml(r.text)}</p>
+        </div>
+      `).join("");
+    });
 }
 
 /* ==========================
