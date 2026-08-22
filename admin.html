@@ -198,6 +198,9 @@
   <div class="nav-item" id="nav-chats" onclick="switchPage('chats')"><i class="fas fa-comments"></i> المحادثات<span class="nbadge" id="unreadBadge" hidden>0</span></div>
   <div class="nav-item" id="nav-users" onclick="switchPage('users')"><i class="fas fa-users"></i> المستخدمون</div>
   <div class="nav-item" id="nav-reviews" onclick="switchPage('reviews')"><i class="fas fa-star"></i> الآراء</div>
+  <div class="nav-sec">أدوات</div>
+  <div class="nav-item" id="nav-analytics" onclick="switchPage('analytics')"><i class="fas fa-chart-pie"></i> التقارير</div>
+  <div class="nav-item" id="nav-broadcast" onclick="switchPage('broadcast')"><i class="fas fa-bullhorn"></i> إرسال جماعي</div>
   <div style="padding:0 8px 8px;margin-top:auto;"><a class="nav-item" href="index.html" style="text-decoration:none"><i class="fas fa-store"></i> المتجر</a></div>
   <div class="s-footer">
     <div class="u-chip">
@@ -256,6 +259,52 @@
       <tbody id="reviewsTable"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">لا توجد آراء</td></tr></tbody></table>
     </div>
   </div>
+
+  <!-- ═══ صفحة التقارير ═══ -->
+  <div class="page" id="page-analytics">
+    <div class="stats-grid">
+      <div class="sc purple"><div class="ico">📊</div><div class="lbl">مجموع الطلبات</div><div class="val" id="anTotalOrders">0</div></div>
+      <div class="sc green"><div class="ico">✅</div><div class="lbl">طلبات مكتملة</div><div class="val" id="anCompletedOrders">0</div></div>
+      <div class="sc yellow"><div class="ico">⏳</div><div class="lbl">قيد التحضير</div><div class="val" id="anPendingOrders">0</div></div>
+      <div class="sc red"><div class="ico">❌</div><div class="lbl">ملغية</div><div class="val" id="anCancelledOrders">0</div></div>
+    </div>
+    <div class="panel" style="margin-top:22px">
+      <div class="ph"><h3>🔥 المنتجات الأكثر طلباً</h3></div>
+      <table><thead><tr><th>المنتج</th><th>عدد الطلبات</th><th>النسبة</th></tr></thead>
+      <tbody id="topProductsTable"><tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px">لا توجد بيانات</td></tr></tbody></table>
+    </div>
+    <div class="panel" style="margin-top:22px">
+      <div class="ph"><h3>💰 أكثر طرق الدفع استخداماً</h3></div>
+      <table><thead><tr><th>طريقة الدفع</th><th>عدد الطلبات</th><th>النسبة</th></tr></thead>
+      <tbody id="topPaymentsTable"><tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px">لا توجد بيانات</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- ═══ صفحة الإرسال الجماعي ═══ -->
+  <div class="page" id="page-broadcast">
+    <div class="panel">
+      <div class="ph"><h3>📢 إرسال رسالة جماعية</h3></div>
+      <div style="padding:22px">
+        <div class="fg"><label>الرسالة</label><textarea id="broadcastMsg" rows="6" placeholder="اكتب رسالتك هنا..." style="resize:vertical;background:rgba(255,255,255,.04);border:1px solid rgba(124,58,237,.25);border-radius:var(--radsm);color:var(--text);font-family:var(--font);font-size:.9rem;padding:12px;outline:none;transition:var(--tr);direction:rtl;width:100%"></textarea></div>
+        <div style="margin:18px 0;display:flex;gap:12px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.88rem">
+            <input type="radio" name="broadcastTarget" value="all" checked style="cursor:pointer"/> 
+            <span>كل المستخدمين (📣 عام)</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.88rem">
+            <input type="radio" name="broadcastTarget" value="active" style="cursor:pointer"/> 
+            <span>المستخدمين النشطين فقط (🔥 نشط)</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.88rem">
+            <input type="radio" name="broadcastTarget" value="withOrders" style="cursor:pointer"/> 
+            <span>من لديهم طلبات (🛒 زبائن)</span>
+          </label>
+        </div>
+        <button class="btn btn-primary" onclick="sendBroadcast()" style="width:100%;justify-content:center"><i class="fas fa-paper-plane"></i> إرسال للجميع</button>
+        <p style="margin-top:12px;font-size:.82rem;color:var(--muted);text-align:center">سيتم إرسال الرسالة لكل المستخدمين المستهدفين في المحادثات</p>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="modal-ov" id="addUserModal">
@@ -272,7 +321,7 @@
 
 <script>
 var KEYS={auth:"fs-admin-auth",convs:"fs-conversations",users:"fs-users",orders:"fs-order-seq"};
-var PAGE_TITLES={overview:"نظرة عامة",orders:"الطلبات",chats:"المحادثات",users:"المستخدمون",reviews:"آراء العملاء"};
+var PAGE_TITLES={overview:"نظرة عامة",orders:"الطلبات",chats:"المحادثات",users:"المستخدمون",reviews:"آراء العملاء",analytics:"التقارير",broadcast:"إرسال جماعي"};
 var activeConvId=null,pollTimer=null,toastTimer=null;
 function hashStr(s){var h=0;for(var i=0;i<s.length;i++)h=Math.imul(31,h)+s.charCodeAt(i)|0;return h.toString(36);}
 var PW_HASH=hashStr("otaibi511@");
@@ -601,11 +650,16 @@ function deleteConv(convId){
   if(!confirm("هل تريد حذف هذه المحادثة نهائياً؟"))return;
   var token=localStorage.getItem("fs-token");
   fetch("/api/chat/delete",{method:"POST",headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},body:JSON.stringify({convId:convId})})
+    .then(function(r){
+      if(!r.ok) throw new Error("فشل الحذف");
+      return r.json();
+    })
     .then(function(){
       activeConvId=null;
       document.getElementById("chatWin").innerHTML='<div class="no-select"><i class="fas fa-comments"></i><span>اختر محادثة</span></div>';
       renderConvList();loadOverview();showToast("🗑️ تم حذف المحادثة");
-    }).catch(function(){
+    }).catch(function(err){
+      console.error("Delete error:", err);
       // fallback localStorage
       var convs=load(KEYS.convs,{});delete convs[convId];save(KEYS.convs,convs);
       activeConvId=null;
@@ -814,3 +868,87 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 </script>
 </body>
 </html>
+
+<script>
+// ═══ صفحة التقارير ═══
+function loadAnalytics(){
+  var token=localStorage.getItem("fs-token");
+  fetch("/api/orders",{headers:token?{Authorization:"Bearer "+token}:{}})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var orders=data.orders||[];
+      document.getElementById("anTotalOrders").textContent=orders.length;
+      document.getElementById("anCompletedOrders").textContent=orders.filter(function(o){return o.status==="done";}).length;
+      document.getElementById("anPendingOrders").textContent=orders.filter(function(o){return o.status==="pending";}).length;
+      document.getElementById("anCancelledOrders").textContent=orders.filter(function(o){return o.status==="cancelled";}).length;
+      
+      // أكثر المنتجات طلباً
+      var productCounts={};
+      orders.forEach(function(o){productCounts[o.product]=(productCounts[o.product]||0)+1;});
+      var sortedProducts=Object.entries(productCounts).sort(function(a,b){return b[1]-a[1];}).slice(0,10);
+      var tbody=document.getElementById("topProductsTable");
+      if(!sortedProducts.length){tbody.innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px">لا توجد بيانات</td></tr>';return;}
+      tbody.innerHTML=sortedProducts.map(function(p,i){
+        var pct=((p[1]/orders.length)*100).toFixed(1);
+        return'<tr>'
+          +'<td><strong>'+(i+1)+'. '+esc(p[0])+'</strong></td>'
+          +'<td style="color:var(--pl);font-weight:700">'+p[1]+'</td>'
+          +'<td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:rgba(255,255,255,.1);border-radius:4px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,var(--primary),var(--pl))"></div></div><span style="font-size:.8rem;color:var(--muted)">'+pct+'%</span></div></td>'
+        +'</tr>';
+      }).join("");
+      
+      // أكثر طرق الدفع
+      var paymentCounts={};
+      orders.forEach(function(o){paymentCounts[o.payment]=(paymentCounts[o.payment]||0)+1;});
+      var sortedPayments=Object.entries(paymentCounts).sort(function(a,b){return b[1]-a[1];});
+      var tbody2=document.getElementById("topPaymentsTable");
+      if(!sortedPayments.length){tbody2.innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px">لا توجد بيانات</td></tr>';return;}
+      tbody2.innerHTML=sortedPayments.map(function(p){
+        var pct=((p[1]/orders.length)*100).toFixed(1);
+        return'<tr>'
+          +'<td><strong>'+esc(p[0])+'</strong></td>'
+          +'<td style="color:var(--success);font-weight:700">'+p[1]+'</td>'
+          +'<td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:rgba(255,255,255,.1);border-radius:4px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,var(--success),var(--cyan))"></div></div><span style="font-size:.8rem;color:var(--muted)">'+pct+'%</span></div></td>'
+        +'</tr>';
+      }).join("");
+    }).catch(function(){showToast("⚠️ فشل تحميل البيانات","error");});
+}
+
+// ═══ الإرسال الجماعي ═══
+function sendBroadcast(){
+  var msg=document.getElementById("broadcastMsg").value.trim();
+  if(!msg){showToast("⚠️ اكتب رسالة أولاً","error");return;}
+  var target=document.querySelector('input[name="broadcastTarget"]:checked').value;
+  if(!confirm("هل تريد إرسال هذه الرسالة لكل المستخدمين المستهدفين؟"))return;
+  
+  var token=localStorage.getItem("fs-token");
+  // جلب قائمة المحادثات
+  fetch("/api/chat/list",{headers:token?{Authorization:"Bearer "+token}:{}})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var convs=data.conversations||[];
+      if(!convs.length){showToast("⚠️ لا توجد محادثات","warn");return;}
+      
+      // إرسال للجميع
+      var sent=0;
+      convs.forEach(function(c){
+        fetch("/api/chat/reply",{
+          method:"POST",
+          headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},
+          body:JSON.stringify({convId:c.convId,text:"📢 "+msg})
+        }).then(function(){sent++;if(sent===convs.length)showToast("✅ تم إرسال الرسالة ل "+convs.length+" محادثة","success");});
+      });
+      document.getElementById("broadcastMsg").value="";
+    }).catch(function(){showToast("⚠️ فشل","error");});
+}
+</script>
+
+<script>
+// تحديث switchPage لدعم الصفحات الجديدة
+var originalSwitchPage = switchPage;
+switchPage = function(id) {
+  originalSwitchPage(id);
+  if (id === "analytics") loadAnalytics();
+  if (id === "broadcast") {}; // لا يحتاج تحميل، فقط فورم
+};
+</script>
