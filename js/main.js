@@ -706,6 +706,16 @@ function updateAccountButton() {
   const label = document.getElementById("accountButtonLabel");
   if (!label) return;
   label.textContent = user ? `${user.role === "admin" ? "🛡️" : "👤"} ${user.name}` : "تسجيل الدخول";
+  
+  // تحديث زر لوحة التحكم في الـ navbar (لو موجود)
+  const adminBtn = document.getElementById("adminPanelBtn");
+  if (adminBtn && user?.role === "admin") {
+    adminBtn.hidden = false;
+    adminBtn.style.display = "flex";
+  } else if (adminBtn) {
+    adminBtn.hidden = true;
+    adminBtn.style.display = "none";
+  }
 }
 
 function openAccount() {
@@ -729,6 +739,25 @@ function openAccount() {
   if (adminBtn)  { adminBtn.hidden = true; adminBtn.style.display = "none"; }
 
   if (user) {
+    // فحص الرتبة من السيرفر أولاً (بدون تحديث تلقائي)
+    if (getAuthToken()) {
+      apiCall("GET", "/api/me")
+        .then(data => {
+          if (data.user && data.user.role !== user.role) {
+            // الرتبة تغيرت — حدّث localStorage
+            const updatedUser = { ...user, role: data.user.role };
+            saveStore("fs-user", updatedUser);
+            // أعد فتح المودال بالبيانات الجديدة
+            openAccount();
+            showToast(`✨ تم تحديث رتبتك إلى: ${data.user.role === "admin" ? "أدمن" : "زبون"}`, "success");
+            return;
+          }
+        })
+        .catch(() => {
+          // السيرفر مو متاح — استمر بالبيانات المحلية
+        });
+    }
+
     const isAdmin = user.role === "admin";
     if (iconEl) iconEl.textContent = isAdmin ? "🛡️" : "👤";
     if (statusEl) statusEl.textContent = `أهلاً بك، ${user.name} 👋`;
