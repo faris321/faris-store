@@ -906,13 +906,29 @@ function initChat() {
     fetch(`/api/chat/messages?convId=${encodeURIComponent(convId)}`)
       .then(r => r.json())
       .then(data => {
+        // فحص: هل المحادثة مخفية عن الزبون؟
+        if (data.hiddenFromBuyer === true) {
+          // أخفِ panel المحادثة وامسح localStorage
+          const panel = document.getElementById("chatPanel");
+          if (panel) panel.hidden = true;
+          clearInterval(chatPollTimer);
+          const convs = loadStore(KEYS.convs, {});
+          delete convs[convId];
+          saveStore(KEYS.convs, convs);
+          showToast("⚠️ هذه المحادثة غير متاحة حالياً", "error");
+          return;
+        }
+
         const serverMsgs = (data.messages || []).filter(m => m.text !== "__linked__");
-        // دمج مع الرسائل المحلية عشان ما تختفي قبل ما يحفظها السيرفر
-        const localConv  = loadStore(KEYS.convs, {})[convId];
-        const localMsgs  = ((localConv?.messages) || []).filter(m => m.text !== "__linked__");
-        // استخدم السيرفر لو فيه رسائل، وإلا استخدم المحلي
-        const msgs = serverMsgs.length > 0 ? serverMsgs : localMsgs;
-        renderMsgs(msgs);
+        // استخدم رسائل السيرفر فقط (مو localStorage) عشان الحذف يشتغل صح
+        renderMsgs(serverMsgs);
+        
+        // حدّث localStorage بالرسائل الجديدة من السيرفر
+        const convs = loadStore(KEYS.convs, {});
+        if (convs[convId]) {
+          convs[convId].messages = serverMsgs;
+          saveStore(KEYS.convs, convs);
+        }
       })
       .catch(() => {
         // fallback: اقرأ من localStorage
@@ -939,54 +955,80 @@ function initChat() {
     const input = document.getElementById("chatInput");
     const text  = input.value.trim();
     if (!text) return;
-    input.value = "";
 
     const name = userName();
 
-    // أضف الرسالة محلياً فوراً عشان تظهر بدون انتظار السيرفر
-    const convs = loadStore(KEYS.convs, {});
-    const localConv = convs[convId] || { id: convId, name, messages: [], unread: 0, at: Date.now() };
-    localConv.messages = localConv.messages || [];
-    const newMsg = { id: Date.now().toString(36), from: "buyer", text, at: new Date().toISOString() };
-    localConv.messages.push(newMsg);
-    localConv.messages = localConv.messages.slice(-200);
-    localConv.unread = (localConv.unread || 0) + 1;
-    localConv.at = Date.now();
-    localConv.name = name;
-    convs[convId] = localConv;
-    saveStore(KEYS.convs, convs);
-    fetchMsgs(); // أظهر الرسالة فوراً
+    // فحص أولاً: هل الزبون ممنوع من الكتابة؟
+    fetch(`/api/chat/messages?convId=${encodeURIComponent(convId)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.mutedBuyer === true) {
+          showToast("⚠️ غير مسموح لك بإرسال رسائل حالياً", "error");
+          input.value = ""; // امسح النص
+          return;
+        }
+        if (data.hiddenFromBuyer === true) {
+          showToast("⚠️ هذه المحادثة غير متاحة حالياً", "error");
+          const panel = document.getElementById("chatPanel");
+          if (panel) panel.hidden = true;
+          clearInterval(chatPollTimer);
+          input.value = "";
+          return;
+        }
 
-    // أرسل للسيرفر
-    fetch("/api/chat/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ convId, text, name, email: loadStore(KEYS.user, null)?.email || "" }),
-    })
-    .then(() => fetchMsgs())
-    .catch(() => {
-      // fallback localStorage
-      const convs = loadStore(KEYS.convs, {});
-      const conv  = convs[convId] || { id: convId, name, messages: [], unread: 0, at: Date.now() };
-      conv.id = convId;
-      conv.messages = conv.messages || [];
-      conv.messages.push({ id: Date.now().toString(36), from: "buyer", text, at: new Date().toISOString() });
-      conv.messages = conv.messages.slice(-200);
-      conv.unread = (conv.unread || 0) + 1;
-      conv.at = Date.now();
-      conv.name = name;
-      convs[convId] = conv;
-      saveStore(KEYS.convs, convs);
-      fetchMsgs();
-    });
+        // الزبون مسموح له — أرسل الرسالة
+        input.value = "";
 
-    // إشعار تيليجرام
-    sendTelegramNotification(
-      `💬 *رسالة دعم جديدة — فارس ستور*\n\n` +
-      `👤 *المرسل:* ${name}\n` +
-      `📝 *الرسالة:* ${text}\n\n` +
-      `⏰ ${new Date().toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}`
-    );
+        // أضف الرسالة محلياً فوراً عشان تظهر بدون انتظار السيرفر
+        const convs = loadStore(KEYS.convs, {});
+        const localConv = convs[convId] || { id: convId, name, messages: [], unread: 0, at: Date.now() };
+        localConv.messages = localConv.messages || [];
+        const newMsg = { id: Date.now().toString(36), from: "buyer", text, at: new Date().toISOString() };
+        localConv.messages.push(newMsg);
+        localConv.messages = localConv.messages.slice(-200);
+        localConv.unread = (localConv.unread || 0) + 1;
+        localConv.at = Date.now();
+        localConv.name = name;
+        convs[convId] = localConv;
+        saveStore(KEYS.convs, convs);
+        fetchMsgs(); // أظهر الرسالة فوراً
+
+        // أرسل للسيرفر
+        fetch("/api/chat/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ convId, text, name, email: loadStore(KEYS.user, null)?.email || "" }),
+        })
+        .then(() => fetchMsgs())
+        .catch(() => {
+          // fallback localStorage
+          const convs = loadStore(KEYS.convs, {});
+          const conv  = convs[convId] || { id: convId, name, messages: [], unread: 0, at: Date.now() };
+          conv.id = convId;
+          conv.messages = conv.messages || [];
+          conv.messages.push({ id: Date.now().toString(36), from: "buyer", text, at: new Date().toISOString() });
+          conv.messages = conv.messages.slice(-200);
+          conv.unread = (conv.unread || 0) + 1;
+          conv.at = Date.now();
+          conv.name = name;
+          convs[convId] = conv;
+          saveStore(KEYS.convs, convs);
+          fetchMsgs();
+        });
+
+        // إشعار تيليجرام
+        sendTelegramNotification(
+          `💬 *رسالة دعم جديدة — فارس ستور*\n\n` +
+          `👤 *المرسل:* ${name}\n` +
+          `📝 *الرسالة:* ${text}\n\n` +
+          `⏰ ${new Date().toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}`
+        );
+      })
+      .catch(() => {
+        // لو فشل الفحص، ما نرسل الرسالة
+        showToast("⚠️ حدث خطأ، حاول مرة أخرى", "error");
+        input.value = "";
+      });
   });
 
   fetchMsgs();
