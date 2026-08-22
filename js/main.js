@@ -757,6 +757,8 @@ function openAccount() {
           roleEl.style.color = "#9d9bc0";
           roleEl.style.background = "rgba(255,255,255,.06)";
           roleEl.style.border = "1px solid rgba(255,255,255,.12)";
+          // التأكد من إخفاء زر لوحة التحكم للزبون
+          if (adminBtn) adminBtn.hidden = true;
         }
       }
     }
