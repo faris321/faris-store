@@ -11,6 +11,9 @@ const fs     = require("fs");
 const path   = require("path");
 const crypto = require("crypto");
 
+// Moyasar for Apple Pay (سعودي)
+// سيتم إضافة secret key لاحقاً من البيئة
+
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, "data");

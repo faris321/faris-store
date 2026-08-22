@@ -1075,33 +1075,15 @@
           <label for="paymentMethod">طريقة الدفع</label>
           <div class="payment-methods" id="paymentMethod" role="radiogroup" aria-label="طرق الدفع">
             <label class="payment-option payment-option-featured">
-              <input type="radio" name="payment" value="Apple Pay" required />
-              <span class="payment-option-icon" style="background:#000;border-radius:5px;width:25px;height:22px;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:900;color:#fff;font-family:system-ui,-apple-system,sans-serif;flex-shrink:0"> Pay</span>
-              <span class="payment-option-name">Apple Pay</span>
-              <span class="payment-option-check">✓</span>
-            </label>
-            <label class="payment-option" style="border-color:rgba(123,31,162,.5);background:rgba(123,31,162,.08);">
-              <input type="radio" name="payment" value="STC Pay" />
-              <span class="payment-option-icon" style="background:#7b1fa2;border-radius:5px;width:25px;height:22px;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:900;color:#fff;flex-shrink:0">STC</span>
-              <span class="payment-option-name">STC Pay</span>
-              <span class="payment-option-check">✓</span>
-            </label>
-            <label class="payment-option">
-              <input type="radio" name="payment" value="تحويل بنكي" />
+              <input type="radio" name="payment" value="تحويل بنكي" required checked />
               <span class="payment-option-icon">🏦</span>
-              <span class="payment-option-name">تحويل بنكي</span>
+              <span class="payment-option-name">تحويل بنكي <span style="color:var(--accent);font-size:.8em;">(الأفضل)</span></span>
               <span class="payment-option-check">✓</span>
             </label>
             <label class="payment-option">
               <input type="radio" name="payment" value="PayPal" />
               <span class="payment-option-icon">💳</span>
               <span class="payment-option-name">PayPal</span>
-              <span class="payment-option-check">✓</span>
-            </label>
-            <label class="payment-option">
-              <input type="radio" name="payment" value="Robux" />
-              <span class="payment-option-icon">🎮</span>
-              <span class="payment-option-name">Robux</span>
               <span class="payment-option-check">✓</span>
             </label>
           </div>
@@ -1390,5 +1372,9 @@
       if (typeof updateModalTotal === "function") updateModalTotal();
     }
   </script>
+  
+  <!-- JavaScript -->
+  <script src="js/catalog-images.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>

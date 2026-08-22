@@ -11,11 +11,8 @@ const TG_TOKEN   = "8352531095:AAHLczHeiNIlTfGkCIWVLIClgisRuu7QEo4";
 const TG_CHAT_ID = "8084788871";
 
 const PAYMENT_ICONS = {
-  "Apple Pay":  "🍎",
-  "STC Pay":    "📱",
   "تحويل بنكي": "🏦",
   "PayPal":     "💳",
-  "Robux":      "🎮",
 };
 
 // ─── مفاتيح localStorage ──────────────────────────────
@@ -497,6 +494,9 @@ async function submitOrder(e) {
 
   const name = user?.name  || "زائر";
   const icon = PAYMENT_ICONS[payment] || "💳";
+  
+  // عرض "(الأفضل)" في الرسائل
+  const paymentDisplay = payment === "تحويل بنكي" ? "تحويل بنكي (الأفضل)" : payment;
 
   // حفظ محلي في لوحة الأدمن
   try {
@@ -526,12 +526,13 @@ async function submitOrder(e) {
 ━━━━━━━━━━━━━━━━
 👤 *الاسم:* ${name}
 ${user?.email ? `📧 *الإيميل:* ${user.email}\n` : ""}📱 *التواصل:* ${contact}
-${icon} *طريقة الدفع:* ${payment}${notes ? `\n📝 *ملاحظات:* ${notes}` : ""}
+${icon} *طريقة الدفع:* ${paymentDisplay}${notes ? `\n📝 *ملاحظات:* ${notes}` : ""}
 ━━━━━━━━━━━━━━━━
 ⚡ الحالة: *قيد التحضير*`;
 
   sendTelegramNotification(tgMsg);
 
+  // معالجة حسب طريقة الدفع
   if (payment === "PayPal") {
     const amount = (usdUnit * qty).toFixed(2);
     window.open(`${PAYPAL_ME_URL}/${amount}USD`, "_blank");
