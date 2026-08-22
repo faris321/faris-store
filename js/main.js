@@ -719,11 +719,13 @@ function openAccount() {
   const otpEl     = document.getElementById("otpForm");
   const logoutEl  = document.getElementById("accountLogout");
   const iconEl    = document.getElementById("acctIcon");
+  const adminBtn  = document.getElementById("adminPanelBtn");
 
   if (formEl)    { formEl.hidden = true;    formEl.style.display = "none"; }
   if (otpEl)     { otpEl.hidden  = true;    otpEl.style.display  = "none"; }
   if (profileEl) { profileEl.hidden = true; }
   if (logoutEl)  { logoutEl.hidden = true; }
+  if (adminBtn)  { adminBtn.hidden = true; }
 
   if (user) {
     const isAdmin = user.role === "admin";
@@ -746,6 +748,8 @@ function openAccount() {
           roleEl.style.color = "#fbbf24";
           roleEl.style.background = "rgba(251,191,36,.15)";
           roleEl.style.border = "1px solid rgba(251,191,36,.3)";
+          // إظهار زر لوحة التحكم للأدمن فقط
+          if (adminBtn) adminBtn.hidden = false;
         } else {
           roleEl.hidden = false;
           roleEl.textContent = "👤 زبون";
