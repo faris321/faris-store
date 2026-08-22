@@ -798,13 +798,19 @@ function openAccount() {
       }
     }
     // إظهار زر تسجيل الخروج للمستخدم المسجل فقط
-    if (logoutEl) logoutEl.hidden = false;
+    if (logoutEl) {
+      logoutEl.hidden = false;
+      logoutEl.style.display = "block";
+    }
   } else {
     // ما في مستخدم — خلّي كل شيء على وضع التسجيل
     if (iconEl) iconEl.textContent = "👤";
     if (statusEl) statusEl.textContent = "أدخل اسمك وإيميلك للتسجيل";
     if (formEl) { formEl.hidden = false; formEl.style.display = "flex"; }
-    if (logoutEl) logoutEl.hidden = true;  // إخفاء زر تسجيل الخروج
+    if (logoutEl) {
+      logoutEl.hidden = true;
+      logoutEl.style.display = "none";
+    }
   }
 }
 
