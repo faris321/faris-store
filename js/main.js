@@ -797,6 +797,7 @@ function openAccount() {
         }
       }
     }
+    // إظهار زر تسجيل الخروج للمستخدم المسجل فقط
     if (logoutEl) logoutEl.hidden = false;
   } else {
     // ما في مستخدم — خلّي كل شيء على وضع التسجيل
