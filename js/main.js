@@ -830,14 +830,24 @@ function submitAccountForm(e) {
       const user = data.user || { name, email, role: "customer" };
       saveStore("fs-user", user);
       closeAccount();
-      updateAccountButton();  // تحديث القائمة فوراً
+      updateAccountButton();
       showToast(`✅ أهلاً ${name}!`, "success");
     })
-    .catch(() => {
-      // fallback محلي
-      saveStore("fs-user", { name, email, role: "customer" });
+    .catch(err => {
+      console.error("Registration failed:", err);
+      // fallback محلي - لكن نحاول نرسل للسيرفر بعدين
+      const user = { name, email, role: "customer" };
+      saveStore("fs-user", user);
+      
+      // محاولة إرسال للسيرفر في الخلفية
+      fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email })
+      }).catch(() => {}); // صامت
+      
       closeAccount();
-      updateAccountButton();  // تحديث القائمة فوراً
+      updateAccountButton();
       showToast(`✅ أهلاً ${name}!`, "success");
     });
 }
