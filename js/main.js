@@ -726,7 +726,7 @@ function openAccount() {
   if (otpEl)     { otpEl.hidden  = true;    otpEl.style.display  = "none"; }
   if (profileEl) { profileEl.hidden = true; }
   if (logoutEl)  { logoutEl.hidden = true; }
-  if (adminBtn)  { adminBtn.hidden = true; }
+  if (adminBtn)  { adminBtn.hidden = true; adminBtn.style.display = "none"; }
 
   if (user) {
     const isAdmin = user.role === "admin";
@@ -750,7 +750,10 @@ function openAccount() {
           roleEl.style.background = "rgba(251,191,36,.15)";
           roleEl.style.border = "1px solid rgba(251,191,36,.3)";
           // إظهار زر لوحة التحكم للأدمن فقط
-          if (adminBtn) adminBtn.hidden = false;
+          if (adminBtn) {
+            adminBtn.hidden = false;
+            adminBtn.style.display = "flex";
+          }
         } else {
           roleEl.hidden = false;
           roleEl.textContent = "👤 زبون";
@@ -758,7 +761,10 @@ function openAccount() {
           roleEl.style.background = "rgba(255,255,255,.06)";
           roleEl.style.border = "1px solid rgba(255,255,255,.12)";
           // التأكد من إخفاء زر لوحة التحكم للزبون
-          if (adminBtn) adminBtn.hidden = true;
+          if (adminBtn) {
+            adminBtn.hidden = true;
+            adminBtn.style.display = "none";
+          }
         }
       }
     }
