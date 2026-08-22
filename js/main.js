@@ -1370,9 +1370,11 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("accountLogout")
     ?.addEventListener("click", () => {
       clearAuth();
-      updateAccountButton();
       closeAccount();
       showToast("✅ تم تسجيل الخروج");
+      updateAccountButton();
+      // أعد فتح المودال عشان يظهر فورم التسجيل بدل البروفايل القديم
+      setTimeout(() => openAccount(), 100);
     });
 
   // ── URL product param ────────────────────────────
