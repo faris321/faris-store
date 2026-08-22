@@ -807,9 +807,14 @@ function openAccount() {
     if (iconEl) iconEl.textContent = "👤";
     if (statusEl) statusEl.textContent = "أدخل اسمك وإيميلك للتسجيل";
     if (formEl) { formEl.hidden = false; formEl.style.display = "flex"; }
+    if (profileEl) { profileEl.hidden = true; profileEl.style.display = "none"; }
     if (logoutEl) {
       logoutEl.hidden = true;
       logoutEl.style.display = "none";
+    }
+    if (adminBtn) {
+      adminBtn.hidden = true;
+      adminBtn.style.display = "none";
     }
   }
 }
