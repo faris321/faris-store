@@ -735,8 +735,8 @@ function openAccount() {
   if (formEl)    { formEl.hidden = true;    formEl.style.display = "none"; }
   if (otpEl)     { otpEl.hidden  = true;    otpEl.style.display  = "none"; }
   if (profileEl) { profileEl.hidden = true; }
-  if (logoutEl)  { logoutEl.hidden = true; }
-  if (adminBtn)  { adminBtn.hidden = true; adminBtn.style.display = "none"; }
+  if (logoutEl)  { logoutEl.hidden = true;  logoutEl.style.display = "none"; }
+  if (adminBtn)  { adminBtn.hidden = true;  adminBtn.style.display = "none"; }
 
   if (user) {
     // فحص الرتبة من السيرفر أولاً (بدون تحديث تلقائي)
