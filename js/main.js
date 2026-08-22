@@ -706,6 +706,33 @@ function updateAccountButton() {
   const label = document.getElementById("accountButtonLabel");
   if (!label) return;
   label.textContent = user ? `${user.role === "admin" ? "🛡️" : "👤"} ${user.name}` : "تسجيل الدخول";
+  
+  // تحديث زر لوحة التحكم في الـ navbar أيضاً (لو موجود)
+  const adminBtn = document.getElementById("adminPanelBtn");
+  if (adminBtn && user?.role === "admin") {
+    adminBtn.hidden = false;
+    adminBtn.style.display = "flex";
+  } else if (adminBtn) {
+    adminBtn.hidden = true;
+    adminBtn.style.display = "none";
+  }
+  
+  // جلب آخر بيانات المستخدم من السيرفر (لو متغيرة)
+  if (user && getAuthToken()) {
+    apiCall("GET", "/api/me")
+      .then(data => {
+        if (data.user && data.user.role !== user.role) {
+          // الرتبة تغيرت — حدّث localStorage
+          const updatedUser = { ...user, role: data.user.role };
+          saveStore("fs-user", updatedUser);
+          updateAccountButton(); // حدّث الزر مرة ثانية
+          showToast(`✨ تم تحديث رتبتك إلى: ${data.user.role === "admin" ? "أدمن" : "زبون"}`, "success");
+        }
+      })
+      .catch(() => {
+        // السيرفر مو متاح — استمر بالبيانات المحلية
+      });
+  }
 }
 
 function openAccount() {
@@ -1300,6 +1327,15 @@ document.addEventListener("DOMContentLoaded", () => {
   initReviews();
   initChat();
   updateAccountButton();
+  
+  // تحديث دوري لبيانات المستخدم (كل 10 ثواني)
+  setInterval(() => {
+    const user = loadStore("fs-user", null);
+    if (user && getAuthToken()) {
+      updateAccountButton(); // يفحص الرتبة ويحدثها لو تغيرت
+    }
+  }, 10000);
+  
   try {
     const raw = JSON.parse(localStorage.getItem(KEYS.cart));
     if (!Array.isArray(raw)) {
