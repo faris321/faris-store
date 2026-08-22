@@ -1375,11 +1375,23 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("accountLogout")
     ?.addEventListener("click", () => {
       clearAuth();
-      closeAccount();
       showToast("✅ تم تسجيل الخروج");
       updateAccountButton();
-      // أعد فتح المودال عشان يظهر فورم التسجيل بدل البروفايل القديم
-      setTimeout(() => openAccount(), 100);
+      
+      // أخفي البروفايل وزر الخروج فوراً
+      const profileEl = document.getElementById("accountProfile");
+      const logoutEl  = document.getElementById("accountLogout");
+      const adminBtn  = document.getElementById("adminPanelBtn");
+      const formEl    = document.getElementById("accountForm");
+      const statusEl  = document.getElementById("accountStatus");
+      const iconEl    = document.getElementById("acctIcon");
+      
+      if (profileEl) { profileEl.hidden = true; profileEl.style.display = "none"; }
+      if (logoutEl)  { logoutEl.hidden  = true; logoutEl.style.display  = "none"; }
+      if (adminBtn)  { adminBtn.hidden  = true; adminBtn.style.display  = "none"; }
+      if (formEl)    { formEl.hidden    = false; formEl.style.display   = "flex"; }
+      if (statusEl)  statusEl.textContent = "أدخل اسمك وإيميلك للتسجيل";
+      if (iconEl)    iconEl.textContent = "👤";
     });
 
   // ── URL product param ────────────────────────────
